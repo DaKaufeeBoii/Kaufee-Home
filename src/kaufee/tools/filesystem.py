@@ -130,7 +130,7 @@ class WriteFileTool(BaseTool):
     """Tool to create or overwrite a file within the workspace with backup."""
 
     name = "write_file"
-    description = "Create or overwrite a file with provided content. Automatically creates a backup if file exists."
+    description = "Create or overwrite a file with provided content. Automatically creates parent directories if needed and backups existing files."
 
     @property
     def parameters_schema(self) -> dict[str, Any]:

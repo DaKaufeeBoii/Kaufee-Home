@@ -60,10 +60,12 @@ class AgentController:
                 model=self.config.remote_model,
             )
         else:
-            return OllamaClient(
+            client = OllamaClient(
                 base_url=self.config.ollama_base_url,
                 model=self.config.ollama_model,
             )
+            self.config.ollama_model = client.model
+            return client
 
     def run_task(
         self,

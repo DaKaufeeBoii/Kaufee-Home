@@ -54,7 +54,14 @@ class Verifier:
         # Verify modified files exist and have non-zero size
         for rel_file in modified_files:
             file_path = self.workspace_root / rel_file
+
+            # Skip __init__.py — empty __init__.py is valid Python convention
+            # and is often created as a directory-creation side effect
+            is_init = file_path.name == "__init__.py"
+
             if not file_path.exists():
+                if is_init:
+                    continue  # Don't fail for missing __init__.py
                 checks.append(
                     VerificationCheck(
                         name=f"file_exists_{rel_file}",
@@ -65,35 +72,46 @@ class Verifier:
                 continue
 
             size = file_path.stat().st_size
-            checks.append(
-                VerificationCheck(
-                    name=f"file_non_empty_{rel_file}",
-                    passed=size > 0,
-                    details=f"File '{rel_file}' exists with size {size} bytes.",
-                )
-            )
 
-            # Check Python AST syntax validity if .py file
-            if file_path.suffix == ".py":
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        code = f.read()
-                    ast.parse(code)
-                    checks.append(
-                        VerificationCheck(
-                            name=f"syntax_valid_{rel_file}",
-                            passed=True,
-                            details=f"Python syntax parsed cleanly for '{rel_file}'.",
-                        )
+            if not is_init:
+                checks.append(
+                    VerificationCheck(
+                        name=f"file_non_empty_{rel_file}",
+                        passed=size > 0,
+                        details=f"File '{rel_file}' exists with size {size} bytes.",
                     )
-                except SyntaxError as syn_err:
+                )
+
+            # Check Python AST syntax validity if .py file, non-empty, and not __init__.py
+            if file_path.suffix == ".py" and not is_init:
+                if size == 0:
                     checks.append(
                         VerificationCheck(
                             name=f"syntax_valid_{rel_file}",
                             passed=False,
-                            details=f"SyntaxError in '{rel_file}': {syn_err}",
+                            details=f"File '{rel_file}' is empty — no code was written.",
                         )
                     )
+                else:
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            code = f.read()
+                        ast.parse(code)
+                        checks.append(
+                            VerificationCheck(
+                                name=f"syntax_valid_{rel_file}",
+                                passed=True,
+                                details=f"Python syntax parsed cleanly for '{rel_file}'.",
+                            )
+                        )
+                    except SyntaxError as syn_err:
+                        checks.append(
+                            VerificationCheck(
+                                name=f"syntax_valid_{rel_file}",
+                                passed=False,
+                                details=f"SyntaxError in '{rel_file}': {syn_err}",
+                            )
+                        )
 
         # 3. Check code execution postconditions if task required running code
         requires_execution = any(
@@ -148,6 +166,33 @@ class Verifier:
                         ),
                     )
                 )
+
+        # 5. Fallback for read-only/query tasks where no files were modified
+        if not checks:
+            non_verify_history = [
+                entry for entry in state.history
+                if entry.get("action", {}).get("tool_name") != "verify"
+            ]
+            has_success = any(
+                entry.get("result", {}).get("success", False)
+                for entry in non_verify_history
+            )
+            no_failures = not any(
+                entry.get("status") in ("FAILED", "BLOCKED", "DENIED")
+                for entry in non_verify_history
+            )
+            passed = bool(non_verify_history) and has_success and no_failures
+            checks.append(
+                VerificationCheck(
+                    name="task_execution",
+                    passed=passed,
+                    details=(
+                        "All planned actions executed successfully without errors."
+                        if passed
+                        else "Task actions failed or history was incomplete."
+                    ),
+                )
+            )
 
         # Overall success: all checks must pass and no fatal check failed
         all_passed = bool(checks) and all(c.passed for c in checks)

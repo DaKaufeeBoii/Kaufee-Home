@@ -88,6 +88,7 @@ def run(
     workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="LLM provider ('ollama', 'remote', 'mock')."),
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model name."),
+    timeout: int = typer.Option(300, "--timeout", "-t", help="LLM request timeout in seconds (default 300, increase for slow CPU inference)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Automatically approve risky actions."),
 ) -> None:
     """Execute a task goal in the workspace."""
@@ -103,7 +104,7 @@ def run(
         )
     )
 
-    controller = AgentController(config=cfg)
+    controller = AgentController(config=cfg, llm_timeout=timeout)
     approval_cb = create_approval_handler(auto_approve=yes)
     step_cb = create_step_reporter()
 
@@ -123,6 +124,21 @@ def run(
 
     # Result Banner
     if final_state.status == TaskStatus.COMPLETED:
+        # For informational or query tasks, display the relevant output prominently
+        for entry in final_state.history:
+            action = entry.get("action", {})
+            result = entry.get("result", {})
+            tname = action.get("tool_name")
+            out = (result.get("output") or "").strip()
+            if out and tname in ("list_files", "read_file", "python_runner"):
+                console.print(
+                    Panel(
+                        out,
+                        title=f"[bold cyan]{tname} Output[/bold cyan]",
+                        border_style="cyan",
+                    )
+                )
+
         console.print(
             Panel(
                 f"[bold green]Task Completed Successfully![/bold green]\n"

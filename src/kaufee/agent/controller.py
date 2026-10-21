@@ -27,10 +27,12 @@ class AgentController:
         config: Optional[KaufeeConfig] = None,
         llm_client: Optional[BaseLLMClient] = None,
         tool_registry: Optional[ToolRegistry] = None,
+        llm_timeout: float = 300.0,
     ):
         self.config = config or KaufeeConfig.load()
         self.workspace_root = self.config.workspace_root
         self.workspace_root.mkdir(parents=True, exist_ok=True)
+        self._llm_timeout = llm_timeout
 
         # Persistence & Store
         state_dir = self.workspace_root / ".kaufee" / "state"
@@ -63,6 +65,7 @@ class AgentController:
             client = OllamaClient(
                 base_url=self.config.ollama_base_url,
                 model=self.config.ollama_model,
+                timeout=self._llm_timeout,
             )
             self.config.ollama_model = client.model
             return client

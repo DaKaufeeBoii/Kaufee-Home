@@ -9,6 +9,7 @@ from kaufee.agent.verifier import Verifier
 from kaufee.safety.policy import PolicyEngine
 from kaufee.state.audit import AuditLogger
 from kaufee.state.models import (
+    PlanStep,
     PolicyDecision,
     StepStatus,
     TaskState,
@@ -89,14 +90,41 @@ class AgentLoop:
                     self._notify("TASK_FAILED", state)
                     return state.fail(err)
 
-            # Determine next action
-            action = self.planner.next_action(state.goal, state)
-            if action is None:
-                # No next action proposed, re-verify final outcome
-                v_result = self.verifier.verify(state.goal, state)
-                if v_result.success:
-                    return state.complete(v_result)
-                return state.fail("No valid next action proposed and verification failed.")
+                # Formulate failure details and log
+                failed_checks = [c for c in v_result.checks if not c.passed]
+                fail_detail = "; ".join(f"{c.name}: {c.details}" for c in failed_checks)
+                self.audit.log("VERIFICATION_FAILED", {"details": fail_detail})
+                failure_entry = {
+                    "action": {"tool_name": "verify", "arguments": {"goal": state.goal}},
+                    "result": {"success": False, "output": "", "error": f"Verification failed — {fail_detail}"},
+                    "status": "FAILED",
+                }
+                state.history.append(failure_entry)
+                self._notify("TASK_FAILED", state)
+
+                # Propose corrective repair action from planner
+                action = self.planner._plan_repair(state.goal, state, failure_entry)
+
+                # Append repair action as a new step in the plan so the execution pointer advances
+                repair_step = PlanStep(
+                    step_number=len(state.plan.steps) + 1 if state.plan else 1,
+                    description=action.reasoning or f"Repair attempt {state.repair_count}",
+                    tool_name=action.tool_name,
+                    arguments=action.arguments,
+                    expected_outcome=f"Repair failure: {fail_detail}",
+                    status=StepStatus.PENDING,
+                )
+                if state.plan:
+                    state.plan.steps.append(repair_step)
+            else:
+                # Determine next action
+                action = self.planner.next_action(state.goal, state)
+                if action is None:
+                    # No next action proposed, re-verify final outcome
+                    v_result = self.verifier.verify(state.goal, state)
+                    if v_result.success:
+                        return state.complete(v_result)
+                    return state.fail("No valid next action proposed and verification failed.")
 
             action_sig = f"{action.tool_name}:{sorted(action.arguments.items())}"
             if action_sig in blocked_actions_signatures:

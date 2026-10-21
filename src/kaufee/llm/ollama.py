@@ -15,7 +15,7 @@ class OllamaClient(BaseLLMClient):
         self,
         base_url: str = "http://localhost:11434",
         model: str = "qwen2.5-coder:7b",
-        timeout: float = 120.0,
+        timeout: float = 300.0,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model

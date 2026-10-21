@@ -17,34 +17,55 @@ CRITICAL RULES:
 1. You can ONLY use the registered tools provided below.
 2. All file paths MUST be relative to the current workspace root (e.g. 'main.py', 'subfolder/test.py'). Never use absolute paths or '..' path traversal.
 3. Every step must have a specific tool, exact arguments matching its schema, and an expected outcome.
-4. To create new files or scripts in subfolders (e.g. 'test-001/largest.py'), use 'write_file' with the full relative path. Parent directories are created automatically. NEVER use 'move_file' to create folders.
+4. To write a file in a subfolder (e.g. 'test-001/largest.py'), use 'write_file' with that path directly. Parent directories are created automatically. NEVER create a dummy '__init__.py' or any empty file just to make a directory.
 5. Use 'write_file' to create or write full files. Use 'edit_file' ONLY to modify an existing file.
-6. If the goal requires running code and fixing errors, the plan must include writing the code with 'write_file', running it with 'python_runner', and verifying output.
-7. Return ONLY a valid JSON object matching this schema:
+6. If the goal requires creating a program, ALWAYS include a python_runner step AFTER write_file to verify it runs.
+7. Return ONLY a valid JSON object — no text or commentary outside the JSON.
+
+!!! MOST IMPORTANT RULE: write_file 'content' MUST be the COMPLETE working source code.
+NEVER set content to an empty string "". The file must have real, functional code.
+
+EXAMPLE — goal: "create a Python program in test-001 to find the largest number":
 {
   "plan": [
     {
       "step_number": 1,
-      "description": "Short explanation of the step",
-      "tool_name": "exact_tool_name",
-      "arguments": { "param1": "val1" },
-      "expected_outcome": "What success looks like"
+      "description": "Write complete largest-number finder",
+      "tool_name": "write_file",
+      "arguments": {
+        "path": "test-001/largest.py",
+        "content": "def find_largest(arr):\\n    return max(arr)\\n\\nif __name__ == '__main__':\\n    nums = [3, 1, 4, 1, 5, 9, 2, 6]\\n    print(f'Largest: {find_largest(nums)}')\\n"
+      },
+      "expected_outcome": "File test-001/largest.py exists with complete working code"
+    },
+    {
+      "step_number": 2,
+      "description": "Run the program to verify it works",
+      "tool_name": "python_runner",
+      "arguments": { "script_path": "test-001/largest.py" },
+      "expected_outcome": "Program prints the largest number without errors"
     }
   ]
 }
-No extra text or commentary outside the JSON block.
 """
 
 REPAIR_SYSTEM_PROMPT = """You are Kaufee's diagnostic and repair engine.
-A previous step or verification check failed.
-Analyze the error and propose a single, targeted corrective tool call (e.g. edit_file or write_file) to repair the issue.
+A previous step or verification check FAILED. Your task is to propose exactly ONE corrective tool call.
 
-Return ONLY a valid JSON object matching this schema:
+Common failure patterns and their fixes:
+- File is empty (size 0 bytes): Use write_file with COMPLETE working source code in 'content'. NEVER use empty string.
+- SyntaxError in Python file: Use write_file to rewrite the file with corrected code.
+- Python script exit code non-zero: Use write_file to fix the bug, then the runner will re-check.
+- File not found: Use write_file to create it at the correct relative path.
+
+Return ONLY a valid JSON object:
 {
-  "reasoning": "Diagnostic explanation of the failure and proposed fix",
+  "reasoning": "One-sentence diagnosis and what the fix does",
   "tool_name": "exact_tool_name",
   "arguments": { "param1": "val1" }
 }
+
+For write_file repairs: 'content' MUST contain the complete, working Python code. NEVER empty.
 """
 
 
@@ -84,6 +105,22 @@ class Planner:
         self.llm = llm_client
         self.registry = tool_registry
 
+    @staticmethod
+    def _compact_schema(schemas: list) -> str:
+        """Render tool schemas in compact one-line-per-tool format to minimise token usage."""
+        lines = []
+        for t in schemas:
+            params = t.get("parameters", {}).get("properties", {})
+            required = set(t.get("parameters", {}).get("required", []))
+            param_parts = []
+            for pname, pdef in params.items():
+                marker = "*" if pname in required else "?"
+                ptype = pdef.get("type", "any")
+                param_parts.append(f"{marker}{pname}:{ptype}")
+            params_str = ", ".join(param_parts)
+            lines.append(f"- {t['name']}({params_str}): {t['description']}")
+        return "\n".join(lines)
+
     def _normalize_tool_name(self, name: str) -> str:
         """Map common aliases to registered tool names."""
         name_lower = name.lower().strip()
@@ -108,9 +145,10 @@ class Planner:
     def create_plan(self, goal: str) -> Plan:
         """Generate a structured plan for the given goal."""
         tools_schema = self.registry.get_schemas()
+        compact_tools = self._compact_schema(tools_schema)
         prompt = (
             f"GOAL: {goal}\n\n"
-            f"AVAILABLE REGISTERED TOOLS:\n{json.dumps(tools_schema, indent=2)}\n\n"
+            f"AVAILABLE TOOLS (* = required, ? = optional):\n{compact_tools}\n\n"
             "Create a structured, step-by-step plan to accomplish this goal."
         )
 
@@ -179,12 +217,13 @@ class Planner:
         """Prompt LLM for a bounded repair action after an error."""
         state.repair_count += 1
         tools_schema = self.registry.get_schemas()
+        compact_tools = self._compact_schema(tools_schema)
         prompt = (
             f"GOAL: {goal}\n"
             f"REPAIR ATTEMPT: {state.repair_count} of {state.max_repairs}\n\n"
             f"FAILED ACTION: {json.dumps(failure_entry.get('action', {}))}\n"
             f"FAILURE RESULT / ERROR: {json.dumps(failure_entry.get('result', {}))}\n\n"
-            f"AVAILABLE TOOLS:\n{json.dumps(tools_schema, indent=2)}\n\n"
+            f"AVAILABLE TOOLS (* = required, ? = optional):\n{compact_tools}\n\n"
             "Propose a single corrective tool call to fix the error."
         )
 

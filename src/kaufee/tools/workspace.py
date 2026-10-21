@@ -9,6 +9,7 @@ import shutil
 import stat
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Optional
 from kaufee.safety.permissions import is_path_safe_and_within_workspace
@@ -148,20 +149,23 @@ class WorkspaceManager:
             destination = self.resolve_path(latest.get("destination_path", ""), must_exist=True)
             if source.exists():
                 return False, f"Cannot undo move because source path '{target_rel_path}' already exists"
-            source.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(destination), str(source))
             destination_backup_id = latest.get("destination_backup_id")
+            destination_record = None
+            backup_file = None
             if destination_backup_id:
                 destination_record = next(
                     (record for record in manifest if record.get("backup_id") == destination_backup_id),
                     None,
                 )
                 if destination_record is None:
-                    return False, "Move was reversed, but the overwritten destination backup record is missing"
+                    return False, "Cannot undo move: overwritten destination backup record is missing"
                 backup_file = Path(destination_record.get("backup_file", ""))
                 if not backup_file.is_file():
-                    return False, "Move was reversed, but the overwritten destination backup file is missing"
-                shutil.copy2(backup_file, destination)
+                    return False, "Cannot undo move: overwritten destination backup file is missing"
+            source.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(destination), str(source))
+            if backup_file is not None:
+                self.atomic_copy(backup_file, destination)
             return True, f"Undid move from '{target_rel_path}' to '{latest['destination_path']}'"
 
         backup_file = Path(latest["backup_file"])
@@ -177,8 +181,26 @@ class WorkspaceManager:
             if destination.exists():
                 if not destination.is_dir():
                     return False, f"Cannot restore directory over non-directory '{target_rel_path}'"
-                shutil.rmtree(destination)
-            shutil.copytree(backup_file, destination, symlinks=True)
+            stage = Path(tempfile.mkdtemp(prefix=f".{destination.name}.restore-", dir=destination.parent))
+            stage.rmdir()
+            displaced = destination.parent / f".{destination.name}.previous-{uuid.uuid4().hex}"
+            try:
+                shutil.copytree(backup_file, stage, symlinks=True)
+                if destination.exists():
+                    os.replace(destination, displaced)
+                try:
+                    os.replace(stage, destination)
+                except Exception:
+                    if displaced.exists():
+                        os.replace(displaced, destination)
+                    raise
+                if displaced.exists():
+                    shutil.rmtree(displaced)
+            except Exception as exc:
+                return False, f"Could not restore directory '{target_rel_path}': {exc}"
+            finally:
+                if stage.exists():
+                    shutil.rmtree(stage, ignore_errors=True)
         else:
             if destination.is_dir():
                 return False, f"Cannot restore file over directory '{target_rel_path}'"

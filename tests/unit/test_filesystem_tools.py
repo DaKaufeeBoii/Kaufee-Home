@@ -29,6 +29,41 @@ def test_write_and_read_file(tmp_path: Path):
     assert content == "Hello World!"
 
 
+def test_read_file_max_bytes_counts_utf8_bytes_and_reports_truncation(tmp_path: Path):
+    (tmp_path / "unicode.txt").write_text("éclair", encoding="utf-8")
+
+    ok, content, metadata = ReadFileTool().run(
+        {"path": "unicode.txt", "max_bytes": 1}, tmp_path
+    )
+
+    assert ok
+    assert content == "�"
+    assert metadata["bytes_read"] == 1
+    assert metadata["truncated"] is True
+
+
+def test_read_file_rejects_negative_byte_limit(tmp_path: Path):
+    (tmp_path / "data.txt").write_text("data", encoding="utf-8")
+
+    ok, message, _ = ReadFileTool().run(
+        {"path": "data.txt", "max_bytes": -1}, tmp_path
+    )
+
+    assert not ok
+    assert "non-negative integer" in message
+
+
+def test_read_file_rejects_non_integer_byte_limit(tmp_path: Path):
+    (tmp_path / "data.txt").write_text("data", encoding="utf-8")
+
+    ok, message, _ = ReadFileTool().run(
+        {"path": "data.txt", "max_bytes": True}, tmp_path
+    )
+
+    assert not ok
+    assert "non-negative integer" in message
+
+
 def test_create_directory_tool(tmp_path: Path):
     ok, _, metadata = CreateDirectoryTool().run({"path": "test001/nested"}, tmp_path)
     assert ok
@@ -147,6 +182,50 @@ def test_delete_directory_and_undo(tmp_path: Path):
     ok, _, _ = undoer.run({"path": "docs"}, tmp_path)
     assert ok
     assert (target / "notes.txt").read_text(encoding="utf-8") == "keep me"
+
+
+def test_directory_undo_replaces_existing_directory_atomically(tmp_path: Path):
+    target = tmp_path / "docs"
+    target.mkdir()
+    (target / "original.txt").write_text("original", encoding="utf-8")
+    deleter = DeleteFileTool()
+    undoer = UndoFileTool()
+
+    assert deleter.run({"path": "docs"}, tmp_path)[0]
+    target.mkdir()
+    (target / "current.txt").write_text("current", encoding="utf-8")
+
+    ok, _, _ = undoer.run({"path": "docs"}, tmp_path)
+    assert ok
+    assert (target / "original.txt").read_text(encoding="utf-8") == "original"
+    assert not (target / "current.txt").exists()
+
+
+def test_directory_undo_failure_preserves_current_directory(tmp_path: Path, monkeypatch):
+    target = tmp_path / "docs"
+    target.mkdir()
+    (target / "original.txt").write_text("original", encoding="utf-8")
+    deleter = DeleteFileTool()
+    undoer = UndoFileTool()
+    assert deleter.run({"path": "docs"}, tmp_path)[0]
+    target.mkdir()
+    (target / "current.txt").write_text("current", encoding="utf-8")
+
+    real_replace = __import__("os").replace
+    failed = False
+
+    def fail_stage_replace(source, destination):
+        nonlocal failed
+        if not failed and Path(source).name.startswith(".docs.restore-"):
+            failed = True
+            raise OSError("simulated stage replacement failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr("kaufee.tools.workspace.os.replace", fail_stage_replace)
+    ok, message, _ = undoer.run({"path": "docs"}, tmp_path)
+    assert not ok
+    assert "could not restore directory" in message.lower()
+    assert (target / "current.txt").read_text(encoding="utf-8") == "current"
 
 
 def test_delete_refuses_workspace_root(tmp_path: Path):

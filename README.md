@@ -245,7 +245,7 @@ kaufee run "Create a Python program that draws a triangle, run it, and fix any e
 Example terminal session:
 ```
 ======================================================================
-Kaufee-Home v0.2.0
+Kaufee-Home v0.2.1
 Goal: Create a Python program that draws a triangle, run it, and fix any errors.
 Workspace: D:\Kaufee\padhai\7th-sem\Agentic-AI\Agentic-AI-Kaufee\workspace
 LLM Provider: ollama (qwen2.5-coder:7b)

@@ -157,7 +157,12 @@ class ReadFileTool(BaseTool):
         if not file_path_arg:
             return False, "Argument 'path' is required.", {}
 
-        max_bytes = int(arguments.get("max_bytes", 50000))
+        max_bytes = arguments.get("max_bytes", 50000)
+        if isinstance(max_bytes, bool) or not isinstance(max_bytes, int):
+            return False, "Argument 'max_bytes' must be a non-negative integer.", {}
+        if max_bytes < 0:
+            return False, "Argument 'max_bytes' must be a non-negative integer.", {}
+        max_bytes = min(max_bytes, 1_000_000)
         is_safe, msg, target = is_path_safe_and_within_workspace(file_path_arg, workspace_root, must_exist=True)
         if not is_safe or target is None:
             return False, msg, {}
@@ -166,11 +171,19 @@ class ReadFileTool(BaseTool):
             return False, f"Target '{file_path_arg}' is not a file.", {}
 
         try:
-            with open(target, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read(max_bytes)
+            with open(target, "rb") as f:
+                raw_content = f.read(max_bytes + 1)
+            truncated = len(raw_content) > max_bytes
+            raw_content = raw_content[:max_bytes]
+            content = raw_content.decode("utf-8", errors="replace")
 
             line_count = len(content.splitlines())
-            return True, content, {"path": str(target.relative_to(workspace_root)), "lines": line_count}
+            return True, content, {
+                "path": str(target.relative_to(workspace_root)),
+                "lines": line_count,
+                "bytes_read": len(raw_content),
+                "truncated": truncated,
+            }
         except Exception as exc:
             return False, f"Failed to read file: {exc}", {}
 

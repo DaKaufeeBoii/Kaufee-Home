@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from rich.console import Console
 from rich.table import Table
+from kaufee import __version__
 from kaufee.agent.controller import AgentController
 from kaufee.config import KaufeeConfig
 from kaufee.llm.base import BaseLLMClient
@@ -690,7 +691,7 @@ def run_full_benchmark(
     """Run all 20 benchmark tasks and generate report."""
     console = Console(safe_box=True)
     console.print("\n[bold cyan]=================================================================[/bold cyan]")
-    console.print("[bold green]       Kaufee-Home v0.2.0 -- 20-Task Evaluation Benchmark Suite       [/bold green]")
+    console.print(f"[bold green]       Kaufee-Home v{__version__} -- 20-Task Evaluation Benchmark Suite       [/bold green]")
     console.print("[bold cyan]=================================================================[/bold cyan]\n")
 
     tasks = build_benchmark_tasks()

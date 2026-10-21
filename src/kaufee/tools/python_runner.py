@@ -108,13 +108,7 @@ class PythonRunnerTool(BaseTool):
         }
         start_time = time.perf_counter()
         try:
-            # File-backed output avoids unbounded in-memory PIPE buffering while
-            # retaining only the configured number of bytes for the result.
-            with (
-                tempfile.TemporaryFile(mode="w+b") as stdout_file,
-                tempfile.TemporaryFile(mode="w+b") as stderr_file,
-                tempfile.TemporaryFile(mode="w+b") as stdin_file,
-            ):
+            with tempfile.TemporaryFile(mode="w+b") as stdin_file:
                 if stdin_text is not None:
                     stdin_file.write(stdin_text.encode("utf-8"))
                     stdin_file.seek(0)
@@ -122,10 +116,35 @@ class PythonRunnerTool(BaseTool):
                     cmd,
                     cwd=str(workspace),
                     stdin=stdin_file if stdin_text is not None else subprocess.DEVNULL,
-                    stdout=stdout_file,
-                    stderr=stderr_file,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     env=env,
                 )
+                stdout_capture = bytearray()
+                stderr_capture = bytearray()
+                stdout_size = [0]
+                stderr_size = [0]
+
+                def drain(stream: Any, capture: bytearray, total_size: list[int]) -> None:
+                    while chunk := stream.read(8192):
+                        total_size[0] += len(chunk)
+                        remaining = self.max_output_bytes - len(capture)
+                        if remaining > 0:
+                            capture.extend(chunk[:remaining])
+                    stream.close()
+
+                stdout_thread = threading.Thread(
+                    target=drain,
+                    args=(process.stdout, stdout_capture, stdout_size),
+                    daemon=True,
+                )
+                stderr_thread = threading.Thread(
+                    target=drain,
+                    args=(process.stderr, stderr_capture, stderr_size),
+                    daemon=True,
+                )
+                stdout_thread.start()
+                stderr_thread.start()
                 timed_out = False
                 cancelled = False
                 deadline = start_time + timeout
@@ -152,13 +171,14 @@ class PythonRunnerTool(BaseTool):
                         process.wait()
                         break
 
+                stdout_thread.join(timeout=1)
+                stderr_thread.join(timeout=1)
                 duration_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
                 output_truncated = (
-                    stdout_file.seek(0, os.SEEK_END) > self.max_output_bytes
-                    or stderr_file.seek(0, os.SEEK_END) > self.max_output_bytes
+                    stdout_size[0] > self.max_output_bytes or stderr_size[0] > self.max_output_bytes
                 )
-                stdout = self._read_bounded(stdout_file)
-                stderr = self._read_bounded(stderr_file)
+                stdout = self._decode_capture(stdout_capture, stdout_size[0])
+                stderr = self._decode_capture(stderr_capture, stderr_size[0])
                 metadata = {
                     "returncode": -1 if timed_out else process.returncode,
                     "duration_ms": duration_ms,
@@ -194,12 +214,10 @@ class PythonRunnerTool(BaseTool):
                 except OSError:
                     pass
 
-    def _read_bounded(self, stream: Any) -> str:
-        stream.seek(0)
-        data = stream.read(self.max_output_bytes + 1)
-        truncated = len(data) > self.max_output_bytes
-        data = data[: self.max_output_bytes]
-        result = data.decode("utf-8", errors="replace")
-        if truncated:
+    @staticmethod
+    def _decode_capture(data: bytearray, total_size: int) -> str:
+        """Decode retained stream bytes and mark output that exceeded its cap."""
+        result = bytes(data).decode("utf-8", errors="replace")
+        if total_size > len(data):
             result += "\n...[stream truncated]..."
         return result

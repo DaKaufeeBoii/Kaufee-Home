@@ -153,15 +153,21 @@ class Verifier:
         if "triangle" in lower_goal:
             triangle_path = self.workspace_root / "triangle.py"
             if triangle_path.exists():
-                res = self._execute_script_check(triangle_path)
-                has_triangle_pattern = "*" in res.details or "^" in res.details or "#" in res.details
+                if last_python_run_success is None:
+                    run_check = self._execute_script_check(triangle_path)
+                    run_succeeded = run_check.passed
+                    run_output = run_check.details
+                else:
+                    run_succeeded = last_python_run_success
+                    run_output = last_python_output
+                has_triangle_pattern = any(mark in run_output for mark in ("*", "^", "#"))
                 checks.append(
                     VerificationCheck(
                         name="triangle_pattern_output",
-                        passed=res.passed and has_triangle_pattern,
+                        passed=run_succeeded and has_triangle_pattern,
                         details=(
-                            f"Triangle output verified: {res.details[:100]}..."
-                            if (res.passed and has_triangle_pattern)
+                            f"Triangle output verified: {run_output[:100]}..."
+                            if (run_succeeded and has_triangle_pattern)
                             else "Triangle program execution did not produce expected pattern."
                         ),
                     )

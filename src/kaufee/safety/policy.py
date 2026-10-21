@@ -57,16 +57,20 @@ class PolicyEngine:
         for key in path_keys:
             if key in args and isinstance(args[key], (str, Path)):
                 target = args[key]
-                must_exist = tool_name in ("read_file", "delete_file")
+                must_exist = key in ("source_path", "source") or (
+                    key in ("path", "file_path", "directory")
+                    and tool_name in ("read_file", "edit_file", "delete_file", "list_files", "undo_file")
+                )
                 is_safe, reason, _ = is_path_safe_and_within_workspace(
                     target, workspace_root, must_exist=must_exist
                 )
                 if not is_safe:
+                    invalid_target = reason.startswith("Target path does not exist:")
                     return PolicyDecision(
                         allowed=False,
                         requires_approval=False,
                         reason=reason,
-                        risk_level=RiskLevel.CRITICAL,
+                        risk_level=RiskLevel.LOW if invalid_target else RiskLevel.CRITICAL,
                     )
 
         # 4. Destructive file operations
@@ -107,7 +111,18 @@ class PolicyEngine:
             )
 
         # 6. Read / Write / Edit / List files
-        if tool_name in ("read_file", "write_file", "edit_file", "list_files", "move_file", "undo_file"):
+        if tool_name in (
+            "read_file", "write_file", "edit_file", "list_files", "create_directory", "move_file", "undo_file"
+        ):
+            if tool_name == "move_file" and args.get("overwrite", False):
+                return PolicyDecision(
+                    allowed=True,
+                    requires_approval=self.config.require_approval_for_delete,
+                    reason="Replacing a destination file is destructive and requires explicit approval."
+                    if self.config.require_approval_for_delete
+                    else "Move permitted; destination overwrite is enabled by configuration.",
+                    risk_level=RiskLevel.HIGH if self.config.require_approval_for_delete else RiskLevel.MEDIUM,
+                )
             return PolicyDecision(
                 allowed=True,
                 requires_approval=False,

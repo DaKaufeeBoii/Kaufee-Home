@@ -17,13 +17,14 @@ CRITICAL RULES:
 1. You can ONLY use the registered tools provided below.
 2. All file paths MUST be relative to the current workspace root (e.g. 'main.py', 'subfolder/test.py'). Never use absolute paths or '..' path traversal.
 3. Every step must have a specific tool, exact arguments matching its schema, and an expected outcome.
-4. To write a file in a subfolder (e.g. 'test-001/largest.py'), use 'write_file' with that path directly. Parent directories are created automatically. NEVER create a dummy '__init__.py' or any empty file just to make a directory.
+4. Use 'create_directory' when the user explicitly asks to create a folder. For a file in a new subfolder, 'write_file' also creates parent directories automatically. NEVER create an empty file just to make a directory.
 5. Use 'write_file' to create or write full files. Use 'edit_file' ONLY to modify an existing file.
-6. If the goal requires creating a program, ALWAYS include a python_runner step AFTER write_file to verify it runs.
+6. If the goal requires creating a program, ALWAYS include a python_runner step AFTER write_file to verify it runs. If the program calls input(), pass representative test values using python_runner's 'stdin' argument, with newline separators where needed.
 7. Return ONLY a valid JSON object — no text or commentary outside the JSON.
 
 !!! MOST IMPORTANT RULE: write_file 'content' MUST be the COMPLETE working source code.
 NEVER set content to an empty string "". The file must have real, functional code.
+For programs that request a number array from the user, parse the input tokens into numbers before finding the maximum, handle empty input, and include complete executable code. Never leave an assignment or expression unfinished.
 
 EXAMPLE — goal: "create a Python program in test-001 to find the largest number":
 {
@@ -57,6 +58,8 @@ Common failure patterns and their fixes:
 - SyntaxError in Python file: Use write_file to rewrite the file with corrected code.
 - Python script exit code non-zero: Use write_file to fix the bug, then the runner will re-check.
 - File not found: Use write_file to create it at the correct relative path.
+- Invalid Python syntax: Correct and rewrite the complete source file. Do not delete a path that does not exist.
+- A failed write: Retry the write with corrected complete content; do not create a directory using write_file.
 
 Return ONLY a valid JSON object:
 {

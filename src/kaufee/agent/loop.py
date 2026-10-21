@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 from typing import Callable, Optional
 from kaufee.agent.planner import Planner
 from kaufee.agent.verifier import Verifier
@@ -46,6 +47,12 @@ class AgentLoop:
         self.workspace_root = workspace_root.resolve()
         self.approval_callback = approval_callback
         self.step_callback = step_callback
+        self.cancellation_event = threading.Event()
+        self.cancellation_event.clear()
+
+    def cancel(self) -> None:
+        """Signal active work, including a running Python child, to stop."""
+        self.cancellation_event.set()
 
     def run(self, state: TaskState) -> TaskState:
         """Run execution loop until completion, failure, cancellation, or step exhaustion."""
@@ -68,7 +75,7 @@ class AgentLoop:
 
         # 2. Main iterative step loop
         for step_idx in range(state.max_steps):
-            if state.is_cancelled():
+            if state.is_cancelled() or self.cancellation_event.is_set():
                 self.audit.log("TASK_CANCELLED", {"step": step_idx})
                 return state.cancel()
 
@@ -143,6 +150,11 @@ class AgentLoop:
                 state.history.append({
                     "action": action.model_dump(),
                     "decision": decision.model_dump(),
+                    "result": {
+                        "success": False,
+                        "output": "",
+                        "error": decision.reason,
+                    },
                     "status": "BLOCKED",
                 })
                 self._notify("ACTION_BLOCKED", state, action=action)
@@ -172,7 +184,13 @@ class AgentLoop:
             # Execute tool
             state.tool_calls_attempted += 1
             self._notify("TOOL_EXEC_START", state, action=action)
-            tool_result = self.tools.execute(action, self.workspace_root)
+            tool_result = self.tools.execute(
+                action, self.workspace_root, cancellation_event=self.cancellation_event
+            )
+
+            if state.is_cancelled() or self.cancellation_event.is_set():
+                self.audit.log("TASK_CANCELLED", {"step": step_idx, "during_tool": action.tool_name})
+                return state.cancel()
 
             self.audit.log("TOOL_EXEC", {
                 "action": action.model_dump(),

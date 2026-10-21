@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 from typing import Callable, Optional
 from kaufee.agent.loop import AgentLoop, ApprovalCallback, StepCallback
 from kaufee.agent.planner import Planner
@@ -50,6 +51,8 @@ class AgentController:
         self.verifier = Verifier(self.workspace_root)
 
         self._current_state: Optional[TaskState] = None
+        self._current_loop: Optional[AgentLoop] = None
+        self._cancellation_event = threading.Event()
 
     def _resolve_llm_client(self) -> BaseLLMClient:
         provider = self.config.llm_provider.lower().strip()
@@ -66,6 +69,8 @@ class AgentController:
                 base_url=self.config.ollama_base_url,
                 model=self.config.ollama_model,
                 timeout=self._llm_timeout,
+                keep_alive=self.config.ollama_keep_alive,
+                num_predict=self.config.ollama_num_predict,
             )
             self.config.ollama_model = client.model
             return client
@@ -84,6 +89,7 @@ class AgentController:
             max_repairs=self.config.max_repairs,
         )
         self._current_state = state
+        self._cancellation_event.clear()
 
         audit_logger = AuditLogger(self.config.audit_dir, state.task_id)
 
@@ -97,11 +103,14 @@ class AgentController:
             approval_callback=approval_callback,
             step_callback=step_callback,
         )
+        self._current_loop = loop
 
         try:
             final_state = loop.run(state)
         except Exception as exc:
             final_state = state.fail(f"Unhandled exception during task loop: {exc}")
+        finally:
+            self._current_loop = None
 
         # Persist final state
         try:
@@ -114,5 +123,9 @@ class AgentController:
     def cancel_current_task(self, reason: str = "Interrupted by user") -> Optional[TaskState]:
         """Cancel active task execution."""
         if self._current_state and self._current_state.status == TaskStatus.RUNNING:
-            return self._current_state.cancel(reason)
+            self._cancellation_event.set()
+            if self._current_loop is not None:
+                self._current_loop.cancel()
+            self._current_state.cancel(reason)
+            return self._current_state
         return None

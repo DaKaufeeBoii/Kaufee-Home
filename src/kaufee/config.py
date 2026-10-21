@@ -51,6 +51,16 @@ class KaufeeConfig(BaseModel):
         default="qwen2.5-coder:7b",
         description="Model name to use with Ollama.",
     )
+    ollama_keep_alive: str = Field(
+        default="10m",
+        description="How long Ollama keeps the selected model loaded after a request.",
+    )
+    ollama_num_predict: int = Field(
+        default=2048,
+        ge=256,
+        le=8192,
+        description="Maximum generated tokens per Ollama response.",
+    )
     remote_api_base_url: str = Field(
         default="https://api.openai.com/v1",
         description="Base URL for remote OpenAI-compatible API.",
@@ -136,6 +146,8 @@ class KaufeeConfig(BaseModel):
         chosen_provider = provider or get_val("KAUFEE_LLM_PROVIDER", "ollama")
 
         ollama_url = get_val("OLLAMA_BASE_URL", "http://localhost:11434")
+        ollama_keep_alive = get_val("KAUFEE_OLLAMA_KEEP_ALIVE", "10m")
+        ollama_num_predict = int(get_val("KAUFEE_OLLAMA_NUM_PREDICT", "2048"))
         ollama_mdl = (
             model if chosen_provider == "ollama" and model else get_val("OLLAMA_MODEL", "qwen2.5-coder:7b")
         )
@@ -164,6 +176,8 @@ class KaufeeConfig(BaseModel):
             llm_provider=chosen_provider,
             ollama_base_url=ollama_url,
             ollama_model=ollama_mdl,
+            ollama_keep_alive=ollama_keep_alive,
+            ollama_num_predict=ollama_num_predict,
             remote_api_base_url=remote_url,
             remote_api_key=remote_key,
             remote_model=remote_mdl,

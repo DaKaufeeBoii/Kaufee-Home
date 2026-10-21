@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kaufee-home"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lightweight, local-first, AI-powered CLI agent for verifiable coding and workspace tasks"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,7 +43,8 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --strict-markers"
+addopts = "-v --strict-markers --basetemp=pytest__/tmp"
+cache_dir = "pytest__/.pytest_cache"
 
 [tool.ruff]
 line-length = 100

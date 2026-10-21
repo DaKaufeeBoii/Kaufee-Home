@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 from typing import Any, Optional
 from kaufee.config import KaufeeConfig
 from kaufee.state.models import ToolCall, ToolResult
 from kaufee.tools.base import BaseTool
 from kaufee.tools.filesystem import (
+    CreateDirectoryTool,
     DeleteFileTool,
     EditFileTool,
     ListFilesTool,
@@ -48,7 +50,12 @@ class ToolRegistry:
             })
         return schemas
 
-    def execute(self, action: ToolCall, workspace_root: Path) -> ToolResult:
+    def execute(
+        self,
+        action: ToolCall,
+        workspace_root: Path,
+        cancellation_event: threading.Event | None = None,
+    ) -> ToolResult:
         """Execute a tool call and return structured ToolResult."""
         tool = self.get(action.tool_name)
         if not tool:
@@ -59,6 +66,8 @@ class ToolRegistry:
                 output="",
                 error=f"Tool '{action.tool_name}' is not registered.",
             )
+        if isinstance(tool, PythonRunnerTool) and cancellation_event is not None:
+            tool.cancellation_event = cancellation_event
         return tool.execute(action.arguments, workspace_root, call_id=action.call_id)
 
     @classmethod
@@ -69,6 +78,7 @@ class ToolRegistry:
         max_bytes = config.max_output_bytes if config else 50000
 
         registry.register(ListFilesTool())
+        registry.register(CreateDirectoryTool())
         registry.register(ReadFileTool())
         registry.register(WriteFileTool())
         registry.register(EditFileTool())

@@ -690,7 +690,7 @@ def run_full_benchmark(
     """Run all 20 benchmark tasks and generate report."""
     console = Console(safe_box=True)
     console.print("\n[bold cyan]=================================================================[/bold cyan]")
-    console.print("[bold green]       Kaufee-Home v0.1.0 -- 20-Task Evaluation Benchmark Suite       [/bold green]")
+    console.print("[bold green]       Kaufee-Home v0.2.0 -- 20-Task Evaluation Benchmark Suite       [/bold green]")
     console.print("[bold cyan]=================================================================[/bold cyan]\n")
 
     tasks = build_benchmark_tasks()

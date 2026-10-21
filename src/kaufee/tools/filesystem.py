@@ -2,13 +2,45 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import shutil
+import json
+import time
 from pathlib import Path
 from typing import Any
 from kaufee.safety.permissions import is_path_safe_and_within_workspace
 from kaufee.tools.base import BaseTool
 from kaufee.tools.workspace import WorkspaceManager
+
+
+class CreateDirectoryTool(BaseTool):
+    """Create a workspace directory without creating a placeholder file."""
+
+    name = "create_directory"
+    description = "Create a directory inside the workspace, including missing parent directories."
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "required": ["path"],
+            "properties": {"path": {"type": "string", "description": "Relative directory path to create."}},
+        }
+
+    def run(self, arguments: dict[str, Any], workspace_root: Path) -> tuple[bool, str, dict[str, Any]]:
+        path = arguments.get("path")
+        if not isinstance(path, str) or not path.strip():
+            return False, "Argument 'path' must be a non-empty directory path.", {}
+        safe, message, target = is_path_safe_and_within_workspace(path, workspace_root)
+        if not safe or target is None:
+            return False, message, {}
+        if target.exists() and not target.is_dir():
+            return False, f"A file already exists at '{path}'.", {}
+        target.mkdir(parents=True, exist_ok=True)
+        return True, f"Directory '{target.relative_to(workspace_root)}' is ready.", {
+            "path": target.relative_to(workspace_root).as_posix(),
+        }
 
 
 class ListFilesTool(BaseTool):
@@ -50,27 +82,44 @@ class ListFilesTool(BaseTool):
         file_count = 0
         dir_count = 0
 
-        if recursive:
-            iterator = target.rglob("*")
-        else:
-            iterator = target.iterdir()
-
-        for entry in sorted(iterator):
-            # Skip internal .kaufee folder
+        def add_entry(entry: Path) -> None:
+            nonlocal file_count, dir_count
             try:
                 rel = entry.relative_to(workspace_root)
-            except ValueError:
-                continue
-            if ".kaufee" in rel.parts or ".git" in rel.parts:
-                continue
+                if ".kaufee" in rel.parts or ".git" in rel.parts:
+                    return
+                # Do not expose protected names or follow symlinks while listing.
+                if entry.is_symlink():
+                    return
+                safe, _, resolved = is_path_safe_and_within_workspace(entry, workspace_root)
+                if not safe or resolved is None:
+                    return
+                if entry.is_dir():
+                    dir_count += 1
+                    items.append(f"[DIR]  {rel}")
+                elif entry.is_file():
+                    file_count += 1
+                    items.append(f"[FILE] {rel} ({entry.stat().st_size} bytes)")
+            except (OSError, ValueError):
+                return
 
-            if entry.is_dir():
-                dir_count += 1
-                items.append(f"[DIR]  {rel}")
-            else:
-                file_count += 1
-                size = entry.stat().st_size
-                items.append(f"[FILE] {rel} ({size} bytes)")
+        if recursive:
+            # Walk manually so symlinked directories are never traversed.
+            pending = [target]
+            while pending:
+                current = pending.pop()
+                try:
+                    children = sorted(current.iterdir(), reverse=True)
+                except OSError:
+                    continue
+                for entry in children:
+                    before = dir_count
+                    add_entry(entry)
+                    if dir_count > before and entry.is_dir() and not entry.is_symlink():
+                        pending.append(entry)
+        else:
+            for entry in sorted(target.iterdir()):
+                add_entry(entry)
 
         if not items:
             return True, "Directory is empty.", {"file_count": 0, "dir_count": 0}
@@ -155,6 +204,22 @@ class WriteFileTool(BaseTool):
 
         if not file_path_arg:
             return False, "Argument 'path' is required.", {}
+        if not isinstance(file_path_arg, str):
+            return False, "Argument 'path' must be a string.", {}
+        if not isinstance(content, str):
+            return False, "Argument 'content' must be a string.", {}
+        if not content.strip():
+            return False, "Argument 'content' must not be empty; use create_directory for folders.", {}
+        if file_path_arg.endswith(("/", "\\")):
+            return False, "A file path cannot end with a directory separator; use create_directory for folders.", {}
+
+        if str(file_path_arg).lower().endswith(".py"):
+            try:
+                ast.parse(content, filename=str(file_path_arg))
+            except SyntaxError as exc:
+                return False, f"Python syntax validation failed before writing: {exc}", {
+                    "syntax_error": str(exc),
+                }
 
         is_safe, msg, target = is_path_safe_and_within_workspace(file_path_arg, workspace_root, must_exist=False)
         if not is_safe or target is None:
@@ -174,9 +239,10 @@ class WriteFileTool(BaseTool):
                 old_content = ""
             backup_id = ws_mgr.backup_file(target, reason="write_file_overwrite")
 
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(content)
+        try:
+            WorkspaceManager.atomic_write(target, content.encode("utf-8"))
+        except Exception as exc:
+            return False, f"Failed to write '{file_path_arg}': {exc}", {}
 
         diff_summary = ""
         if old_content:
@@ -250,8 +316,17 @@ class EditFileTool(BaseTool):
         backup_id = ws_mgr.backup_file(target, reason="edit_file")
 
         updated = original.replace(target_str, replacement_str, 1)
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(updated)
+        if target.suffix.lower() == ".py":
+            try:
+                ast.parse(updated, filename=str(target))
+            except SyntaxError as exc:
+                return False, f"Python syntax validation failed; edit was not applied: {exc}", {
+                    "syntax_error": str(exc),
+                }
+        try:
+            WorkspaceManager.atomic_write(target, updated.encode("utf-8"))
+        except Exception as exc:
+            return False, f"Failed to edit '{file_path_arg}': {exc}", {}
 
         diff = ws_mgr.generate_diff(original, updated, target.name)
         msg = f"Successfully edited '{target.relative_to(workspace_root)}'.\nDiff:\n{diff}"
@@ -300,6 +375,8 @@ class MoveFileTool(BaseTool):
         is_safe_src, msg_src, src = is_path_safe_and_within_workspace(src_arg, workspace_root, must_exist=True)
         if not is_safe_src or src is None:
             return False, msg_src, {}
+        if src == workspace_root.resolve():
+            return False, "The workspace root cannot be moved.", {}
 
         is_safe_dst, msg_dst, dst = is_path_safe_and_within_workspace(dst_arg, workspace_root, must_exist=False)
         if not is_safe_dst or dst is None:
@@ -308,12 +385,56 @@ class MoveFileTool(BaseTool):
         if dst.exists() and not overwrite:
             return False, f"Destination path '{dst_arg}' already exists and overwrite is false.", {}
 
+        if src.is_dir() and (dst == src or src in dst.parents):
+            return False, "A directory cannot be moved into itself or one of its descendants.", {}
+        if src == dst:
+            return False, "Source and destination paths are identical.", {}
+        if dst.exists() and overwrite and dst.is_dir():
+            return False, "Overwriting an existing directory is not supported.", {}
+
+        ws_mgr = WorkspaceManager(workspace_root)
+        destination_backup_id = None
+        if dst.exists() and overwrite:
+            try:
+                destination_backup_id = ws_mgr.backup_path(dst, reason="move_file_overwrite")
+            except Exception as exc:
+                return False, f"Could not back up destination: {exc}", {}
+        try:
+            source_backup_id = ws_mgr.backup_path(src, reason="move_file_source")
+        except Exception as exc:
+            return False, f"Could not back up source: {exc}", {}
+
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dst))
+        try:
+            shutil.move(str(src), str(dst))
+        except Exception as exc:
+            return False, f"Move failed: {exc}", {}
+
+        move_record = {
+            "backup_id": f"move_{time.time_ns()}_{src.name}",
+            "original_path": src.relative_to(workspace_root).as_posix(),
+            "timestamp": time.time_ns(),
+            "reason": "move_file",
+            "destination_path": dst.relative_to(workspace_root).as_posix(),
+            "destination_backup_id": destination_backup_id,
+        }
+        try:
+            ws_mgr.record_backup(move_record)
+        except Exception as exc:
+            try:
+                shutil.move(str(dst), str(src))
+                if destination_backup_id:
+                    ws_mgr.restore_latest_backup(str(dst.relative_to(workspace_root)))
+            except Exception as rollback_exc:
+                return False, f"Move completed, but undo logging and rollback failed: {exc}; {rollback_exc}", {}
+            return False, f"Move completed but undo record could not be saved: {exc}", {}
 
         return True, f"Moved '{src.relative_to(workspace_root)}' to '{dst.relative_to(workspace_root)}'.", {
             "source": str(src.relative_to(workspace_root)),
             "destination": str(dst.relative_to(workspace_root)),
+            "backup_id": move_record["backup_id"],
+            "source_backup_id": source_backup_id,
+            "destination_backup_id": destination_backup_id,
         }
 
 
@@ -344,6 +465,8 @@ class DeleteFileTool(BaseTool):
         is_safe, msg, target = is_path_safe_and_within_workspace(file_path_arg, workspace_root, must_exist=True)
         if not is_safe or target is None:
             return False, msg, {}
+        if target == workspace_root.resolve():
+            return False, "The workspace root cannot be deleted.", {}
 
         ws_mgr = WorkspaceManager(workspace_root)
         backup_id = None
@@ -355,8 +478,15 @@ class DeleteFileTool(BaseTool):
                 "backup_id": backup_id,
             }
         elif target.is_dir():
+            try:
+                backup_id = ws_mgr.backup_path(target, reason="delete_directory")
+            except Exception as exc:
+                return False, f"Could not record directory backup: {exc}", {}
             shutil.rmtree(target)
-            return True, f"Directory '{target.relative_to(workspace_root)}' deleted.", {}
+            target_rel = str(target.relative_to(workspace_root))
+            return True, f"Directory '{target_rel}' deleted (Backup ID: {backup_id}).", {
+                "backup_id": backup_id,
+            }
 
         return False, f"Target '{file_path_arg}' not found.", {}
 

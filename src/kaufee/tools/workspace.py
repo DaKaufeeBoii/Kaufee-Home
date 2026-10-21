@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import shutil
+import stat
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -24,8 +27,91 @@ class WorkspaceManager:
 
     def _ensure_manifest(self) -> None:
         if not self.manifest_path.exists():
-            with open(self.manifest_path, "w", encoding="utf-8") as f:
-                json.dump([], f)
+            self._write_manifest([])
+
+    def _read_manifest(self) -> list[dict]:
+        with open(self.manifest_path, "r", encoding="utf-8") as stream:
+            data = json.load(stream)
+        if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+            raise ValueError("Backup manifest must contain a list of records")
+        return data
+
+    def _write_manifest(self, manifest: list[dict]) -> None:
+        """Replace the manifest atomically so interruption cannot leave partial JSON."""
+        fd, temporary_name = tempfile.mkstemp(prefix="manifest_", suffix=".tmp", dir=self.backup_dir)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+                json.dump(manifest, stream, indent=2)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary_name, self.manifest_path)
+        finally:
+            Path(temporary_name).unlink(missing_ok=True)
+
+    def record_backup(self, record: dict) -> None:
+        manifest = self._read_manifest()
+        manifest.append(record)
+        self._write_manifest(manifest)
+
+    @staticmethod
+    def atomic_write(destination: Path, content: bytes) -> None:
+        """Write bytes beside the destination and atomically replace the file."""
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        mode = None
+        try:
+            mode = stat.S_IMODE(destination.stat().st_mode)
+        except FileNotFoundError:
+            pass
+        fd, temporary_name = tempfile.mkstemp(prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if mode is not None:
+                os.chmod(temporary_name, mode)
+            os.replace(temporary_name, destination)
+        finally:
+            Path(temporary_name).unlink(missing_ok=True)
+
+    @staticmethod
+    def atomic_copy(source: Path, destination: Path) -> None:
+        """Copy a file to a sibling temporary file, then replace destination."""
+        WorkspaceManager.atomic_write(destination, source.read_bytes())
+
+    def backup_path(self, target_path: Path, reason: str) -> Optional[str]:
+        """Snapshot a file or directory and record it before its caller mutates it."""
+        target_path = self.resolve_path(target_path, must_exist=True)
+        if target_path.is_symlink():
+            return None
+        if not target_path.is_file() and not target_path.is_dir():
+            return None
+
+        timestamp = time.time_ns()
+        backup_id = f"{timestamp}_{target_path.name or 'workspace'}"
+        backup_item = self.backup_dir / backup_id
+        is_directory = target_path.is_dir()
+        if is_directory:
+            shutil.copytree(target_path, backup_item, symlinks=True)
+        else:
+            shutil.copy2(target_path, backup_item)
+        record = {
+            "backup_id": backup_id,
+            "original_path": target_path.relative_to(self.workspace_root).as_posix(),
+            "timestamp": timestamp,
+            "reason": reason,
+            "backup_file": str(backup_item),
+            "is_directory": is_directory,
+        }
+        try:
+            self.record_backup(record)
+        except Exception:
+            if is_directory:
+                shutil.rmtree(backup_item, ignore_errors=True)
+            else:
+                backup_item.unlink(missing_ok=True)
+            raise
+        return backup_id
 
     def resolve_path(self, target: str | Path, must_exist: bool = False) -> Path:
         """Resolve path and verify it is strictly inside workspace."""
@@ -41,53 +127,62 @@ class WorkspaceManager:
         if not target_path.is_file():
             return None
 
-        timestamp = int(time.time() * 1000)
-        rel_path = target_path.relative_to(self.workspace_root)
-        clean_name = str(rel_path).replace("\\", "_").replace("/", "_")
-        backup_filename = f"{timestamp}_{clean_name}"
-        backup_file_path = self.backup_dir / backup_filename
-
-        shutil.copy2(target_path, backup_file_path)
-
-        record = {
-            "backup_id": backup_filename,
-            "original_path": str(rel_path),
-            "timestamp": timestamp,
-            "reason": reason,
-            "backup_file": str(backup_file_path),
-        }
-
-        try:
-            with open(self.manifest_path, "r", encoding="utf-8") as f:
-                manifest = json.load(f)
-            manifest.append(record)
-            with open(self.manifest_path, "w", encoding="utf-8") as f:
-                json.dump(manifest, f, indent=2)
-        except Exception:
-            pass
-
-        return backup_filename
+        return self.backup_path(target_path, reason)
 
     def restore_latest_backup(self, target_rel_path: str) -> tuple[bool, str]:
         """Restore file from the latest available backup in manifest."""
         try:
-            with open(self.manifest_path, "r", encoding="utf-8") as f:
-                manifest = json.load(f)
+            manifest = self._read_manifest()
         except Exception as exc:
             return False, f"Could not read backup manifest: {exc}"
 
-        matches = [m for m in manifest if m["original_path"] == target_rel_path]
+        safe_target = self.resolve_path(target_rel_path)
+        normalized_target = safe_target.relative_to(self.workspace_root).as_posix()
+        matches = [m for m in manifest if m.get("original_path", "").replace("\\", "/") == normalized_target]
         if not matches:
             return False, f"No backups found for '{target_rel_path}'"
 
         latest = sorted(matches, key=lambda m: m["timestamp"], reverse=True)[0]
+        if latest.get("reason") == "move_file":
+            source = self.resolve_path(target_rel_path)
+            destination = self.resolve_path(latest.get("destination_path", ""), must_exist=True)
+            if source.exists():
+                return False, f"Cannot undo move because source path '{target_rel_path}' already exists"
+            source.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(destination), str(source))
+            destination_backup_id = latest.get("destination_backup_id")
+            if destination_backup_id:
+                destination_record = next(
+                    (record for record in manifest if record.get("backup_id") == destination_backup_id),
+                    None,
+                )
+                if destination_record is None:
+                    return False, "Move was reversed, but the overwritten destination backup record is missing"
+                backup_file = Path(destination_record.get("backup_file", ""))
+                if not backup_file.is_file():
+                    return False, "Move was reversed, but the overwritten destination backup file is missing"
+                shutil.copy2(backup_file, destination)
+            return True, f"Undid move from '{target_rel_path}' to '{latest['destination_path']}'"
+
         backup_file = Path(latest["backup_file"])
-        if not backup_file.is_file():
+        is_directory = latest.get("is_directory", False)
+        if is_directory and not backup_file.is_dir():
+            return False, f"Directory backup '{backup_file}' missing from disk"
+        if not is_directory and not backup_file.is_file():
             return False, f"Backup file '{backup_file}' missing from disk"
 
-        destination = self.resolve_path(target_rel_path)
+        destination = safe_target
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(backup_file, destination)
+        if is_directory:
+            if destination.exists():
+                if not destination.is_dir():
+                    return False, f"Cannot restore directory over non-directory '{target_rel_path}'"
+                shutil.rmtree(destination)
+            shutil.copytree(backup_file, destination, symlinks=True)
+        else:
+            if destination.is_dir():
+                return False, f"Cannot restore file over directory '{target_rel_path}'"
+            self.atomic_copy(backup_file, destination)
         return True, f"Restored '{target_rel_path}' from backup {latest['backup_id']}"
 
     @staticmethod

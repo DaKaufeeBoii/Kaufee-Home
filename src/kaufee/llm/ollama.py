@@ -16,10 +16,14 @@ class OllamaClient(BaseLLMClient):
         base_url: str = "http://localhost:11434",
         model: str = "qwen2.5-coder:7b",
         timeout: float = 300.0,
+        keep_alive: str = "10m",
+        num_predict: int = 2048,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        self.keep_alive = keep_alive
+        self.num_predict = max(256, int(num_predict))
         self._auto_select_model_if_needed()
 
     def get_installed_models(self) -> list[str]:
@@ -66,6 +70,8 @@ class OllamaClient(BaseLLMClient):
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "keep_alive": self.keep_alive,
+            "options": {"num_predict": self.num_predict},
         }
         if system_prompt:
             payload["system"] = system_prompt
@@ -96,6 +102,8 @@ class OllamaClient(BaseLLMClient):
             "model": self.model,
             "messages": messages,
             "stream": False,
+            "keep_alive": self.keep_alive,
+            "options": {"num_predict": self.num_predict},
         }
         if json_mode:
             payload["format"] = "json"

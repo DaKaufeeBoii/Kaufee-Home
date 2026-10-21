@@ -30,15 +30,46 @@ def test_protected_files_blocked(tmp_path: Path):
     workspace.mkdir()
 
     protected_targets = [
+        ".kaufee/backups/backups_manifest.json",
         ".git",
         ".env",
+        ".ENV.local",
         "id_rsa",
+        "nested/.ssh/known_hosts",
+        "windows\\system32\\config",
     ]
 
     for p in protected_targets:
         is_safe, msg, resolved = is_path_safe_and_within_workspace(p, workspace)
         assert is_safe is False
         assert "protected" in msg.lower()
+
+
+def test_protected_path_components_are_case_insensitive(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    for target in (".GIT/config", "nested/.AWS/credentials", "nested/.ENV.local"):
+        safe, reason, _ = is_path_safe_and_within_workspace(target, workspace)
+        assert not safe
+        assert "protected" in reason.lower()
+
+
+def test_symlinks_inside_workspace_are_rejected(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    actual = workspace / "actual.txt"
+    actual.write_text("data", encoding="utf-8")
+    link = workspace / "linked.txt"
+    try:
+        link.symlink_to(actual)
+    except OSError:
+        return
+
+    safe, reason, resolved = is_path_safe_and_within_workspace(link, workspace, must_exist=True)
+    assert not safe
+    assert "symbolic link" in reason.lower()
+    assert resolved is None
 
 
 def test_policy_engine_blocks_outside_access(tmp_path: Path):

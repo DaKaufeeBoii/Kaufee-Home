@@ -28,7 +28,7 @@ def test_syntax_repair_end_to_end(tmp_path: Path):
     controller = AgentController(config=cfg, llm_client=mock_llm)
 
     goal = "Fix the syntax error in broken.py, run it, and verify the output."
-    state = controller.run_task(goal=goal)
+    state = controller.run_task(goal=goal, approval_callback=lambda _action, _decision: True)
 
     assert state.status == TaskStatus.COMPLETED
     assert state.verification_result is not None

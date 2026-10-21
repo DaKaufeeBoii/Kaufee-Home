@@ -171,6 +171,8 @@
    kaufee run "Create a Python program that prints Hello World"
    ```
 
+   When Kaufee asks to run generated Python, review the action and approve it only if you trust the task and code. Avoid `--yes` for untrusted goals because it automatically approves risky actions. Python execution is not isolated from your operating-system account.
+
 3. To use a remote OpenAI-compatible provider, set these values in a `.env` file in the project directory:
 
    ```ini

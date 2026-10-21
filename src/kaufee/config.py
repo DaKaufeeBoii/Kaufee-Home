@@ -95,6 +95,8 @@ class KaufeeConfig(BaseModel):
     )
     max_output_bytes: int = Field(
         default=50000,
+        ge=1,
+        le=1000000,
         description="Maximum bytes captured from command or file output.",
     )
 
@@ -106,6 +108,10 @@ class KaufeeConfig(BaseModel):
     require_approval_for_install: bool = Field(
         default=True,
         description="Require explicit approval before package installation.",
+    )
+    require_approval_for_python: bool = Field(
+        default=True,
+        description="Require explicit approval before running generated Python code.",
     )
     allow_arbitrary_shell: bool = Field(
         default=False,
@@ -165,6 +171,7 @@ class KaufeeConfig(BaseModel):
 
         req_del_appr = get_val("KAUFEE_REQUIRE_APPROVAL_FOR_DELETE", "true").lower() in ("1", "true", "yes")
         req_inst_appr = get_val("KAUFEE_REQUIRE_APPROVAL_FOR_INSTALL", "true").lower() in ("1", "true", "yes")
+        req_python_appr = get_val("KAUFEE_REQUIRE_APPROVAL_FOR_PYTHON", "true").lower() in ("1", "true", "yes")
         allow_shell = get_val("KAUFEE_ALLOW_ARBITRARY_SHELL", "false").lower() in ("1", "true", "yes")
 
         audit_dir_str = get_val("KAUFEE_AUDIT_LOG_DIR", "./.kaufee/audit")
@@ -187,6 +194,7 @@ class KaufeeConfig(BaseModel):
             max_output_bytes=max_out_bytes,
             require_approval_for_delete=req_del_appr,
             require_approval_for_install=req_inst_appr,
+            require_approval_for_python=req_python_appr,
             allow_arbitrary_shell=allow_shell,
             audit_dir=audit_path,
             backup_dir=backup_path,

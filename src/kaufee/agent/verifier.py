@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import ast
 import re
-import subprocess
-import sys
 from pathlib import Path
 from typing import Optional
 from kaufee.state.models import TaskState, VerificationCheck, VerificationResult
@@ -121,20 +119,13 @@ class Verifier:
 
         if requires_execution:
             if last_python_run_success is None:
-                # If script was created but not executed, verify by executing it now
-                py_files = [f for f in modified_files if f.endswith(".py")]
-                if py_files:
-                    target_script = self.workspace_root / py_files[0]
-                    res = self._execute_script_check(target_script)
-                    checks.append(res)
-                else:
-                    checks.append(
-                        VerificationCheck(
-                            name="code_execution",
-                            passed=False,
-                            details="Task required code execution, but no Python script was executed or found.",
-                        )
+                checks.append(
+                    VerificationCheck(
+                        name="code_execution",
+                        passed=False,
+                        details="Execution was required but no approved Python runner result was recorded.",
                     )
+                )
             else:
                 checks.append(
                     VerificationCheck(
@@ -154,9 +145,8 @@ class Verifier:
             triangle_path = self.workspace_root / "triangle.py"
             if triangle_path.exists():
                 if last_python_run_success is None:
-                    run_check = self._execute_script_check(triangle_path)
-                    run_succeeded = run_check.passed
-                    run_output = run_check.details
+                    run_succeeded = False
+                    run_output = "No approved Python runner result was recorded."
                 else:
                     run_succeeded = last_python_run_success
                     run_output = last_python_output
@@ -209,35 +199,3 @@ class Verifier:
         )
 
         return VerificationResult(success=all_passed, message=msg, checks=checks)
-
-    def _execute_script_check(self, script_path: Path) -> VerificationCheck:
-        """Run script in subprocess for independent verification."""
-        try:
-            res = subprocess.run(
-                [sys.executable, str(script_path)],
-                cwd=str(self.workspace_root),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=10,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-            if res.returncode == 0:
-                return VerificationCheck(
-                    name=f"independent_run_{script_path.name}",
-                    passed=True,
-                    details=res.stdout.strip() or "Exit code 0",
-                )
-            else:
-                return VerificationCheck(
-                    name=f"independent_run_{script_path.name}",
-                    passed=False,
-                    details=f"Exit code {res.returncode}. Stderr: {res.stderr.strip()}",
-                )
-        except Exception as exc:
-            return VerificationCheck(
-                name=f"independent_run_{script_path.name}",
-                passed=False,
-                details=f"Verification run exception: {exc}",
-            )

@@ -43,3 +43,26 @@ def test_package_install_requires_approval(tmp_path: Path):
 
     assert decision.allowed is True
     assert decision.requires_approval is True
+
+
+def test_python_execution_requires_approval_by_default(tmp_path: Path):
+    cfg = KaufeeConfig(workspace_root=tmp_path)
+    decision = PolicyEngine(cfg).validate(
+        ToolCall(tool_name="python_runner", arguments={"code": "print('hello')"}), tmp_path
+    )
+
+    assert decision.allowed
+    assert decision.requires_approval
+    assert decision.risk_level == RiskLevel.HIGH
+    assert "not an OS sandbox" in decision.reason
+
+
+def test_python_execution_can_only_skip_approval_by_explicit_configuration(tmp_path: Path):
+    cfg = KaufeeConfig(workspace_root=tmp_path, require_approval_for_python=False)
+    decision = PolicyEngine(cfg).validate(
+        ToolCall(tool_name="python_runner", arguments={"code": "print('hello')"}), tmp_path
+    )
+
+    assert decision.allowed
+    assert not decision.requires_approval
+    assert decision.risk_level == RiskLevel.MEDIUM

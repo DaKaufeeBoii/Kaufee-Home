@@ -103,11 +103,17 @@ class PolicyEngine:
                         reason=reason,
                         risk_level=RiskLevel.CRITICAL,
                     )
+            requires_approval = self.config.require_approval_for_python
             return PolicyDecision(
                 allowed=True,
-                requires_approval=False,
-                reason="Python execution permitted within bounded workspace.",
-                risk_level=RiskLevel.LOW,
+                requires_approval=requires_approval,
+                reason=(
+                    "Generated Python runs with the current user's OS permissions; explicit approval is required. "
+                    "Workspace checks and resource limits are not an OS sandbox."
+                    if requires_approval
+                    else "Python execution allowed per configuration; generated code retains the current user's OS permissions."
+                ),
+                risk_level=RiskLevel.HIGH if requires_approval else RiskLevel.MEDIUM,
             )
 
         # 6. Read / Write / Edit / List files

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Require explicit user approval before executing generated Python by default.
+- Removed verifier-side script execution that could bypass the Python runner's approval and limits.
+- Bound configuration for captured process output to at most 1 MB.
+
 ## 0.2.1
 
 - Restore directories through a staged replacement, preserving the current directory if restoration fails.

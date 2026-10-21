@@ -716,6 +716,7 @@ def run_full_benchmark(
             llm_provider="mock",
             audit_dir=task_ws / ".kaufee" / "audit",
             step_timeout=5,
+            require_approval_for_python=True,
         )
 
         mock_llm = MockLLMClient(custom_handler=t.custom_llm_handler)

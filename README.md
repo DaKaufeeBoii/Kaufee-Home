@@ -57,7 +57,7 @@ graph TD
 | **Planner** (`src/kaufee/agent/planner.py`) | Converts natural language goals into typed plans; diagnoses errors and proposes repair actions. |
 | **Model Adapter** (`src/kaufee/llm/`) | Decoupled client adapters for Ollama, OpenAI-compatible remote APIs, and deterministic mock testing. |
 | **Tool Registry** (`src/kaufee/tools/registry.py`) | Typed schemas, parameter validation, and dynamic tool dispatch. |
-| **Policy Engine** (`src/kaufee/safety/policy.py`) | Enforces workspace isolation, blocks path traversal, disables arbitrary shell by default, and triggers approval gates. |
+| **Policy Engine** (`src/kaufee/safety/policy.py`) | Checks workspace paths, blocks traversal, disables arbitrary shell by default, and requires approval for generated Python by default. |
 | **Filesystem Tools** (`src/kaufee/tools/filesystem.py`) | Workspace-bounded `list_files`, `create_directory`, `read_file`, `write_file`, `edit_file`, `move_file`, `delete_file`, and `undo_file`. |
 | **Python Runner** (`src/kaufee/tools/python_runner.py`) | Subprocess execution with strict timeouts, output limits, and unbuffered stdout/stderr capture. |
 | **Verifier** (`src/kaufee/agent/verifier.py`) | Independent AST parsing, exit code inspection, file existence checks, and domain assertion tests. |
@@ -75,7 +75,7 @@ Kaufee-Home applies application-level checks; it is not a secure execution sandb
 | **Create / Edit workspace files** | Allowed with automated backup; file replacement is atomic on the same filesystem |
 | **Move / Rename files** | Allowed after strict path validation |
 | **Delete files** | Requires explicit user approval; automatically creates backup snapshot |
-| **Execute generated Python** | Timeout and captured-output limits; minimal child environment; still has the current user's OS permissions |
+| **Execute generated Python** | Requires explicit approval by default; timeout and captured-output limits; still has the current user's OS permissions |
 | **Install packages** | Requires explicit user approval |
 | **Arbitrary shell commands** | Disabled by default |
 | **Path traversal and existing symlinks** | Rejected by path validation (does not prevent concurrent path races) |
@@ -245,7 +245,7 @@ kaufee run "Create a Python program that draws a triangle, run it, and fix any e
 Example terminal session:
 ```
 ======================================================================
-Kaufee-Home v0.2.1
+Kaufee-Home v0.2.2
 Goal: Create a Python program that draws a triangle, run it, and fix any errors.
 Workspace: D:\Kaufee\padhai\7th-sem\Agentic-AI\Agentic-AI-Kaufee\workspace
 LLM Provider: ollama (qwen2.5-coder:7b)
@@ -372,7 +372,7 @@ The repository includes 20 deterministic scenarios across 8 categories. Run `kau
 
 ## Known Limitations
 
-1. **Subprocess Isolation**: The Python runner uses a minimal environment, timeout, and bounded captured output, but generated code still runs with the current user's permissions and can access files and network resources available to that account.
+1. **Subprocess Isolation**: Python execution requires approval by default and has a timeout and bounded captured output. Approval is not isolation: approved code still runs with the current user's permissions and can access files and network resources available to that account.
 2. **Interactive Prompts in Child Code**: Python programs requiring interactive `input()` from stdin are not currently supported; scripts should receive parameters via command-line arguments or files.
 3. **Multi-Agent Orchestration**: Deliberately excluded in v1.0 in favor of a reliable, predictable single-agent loop.
 

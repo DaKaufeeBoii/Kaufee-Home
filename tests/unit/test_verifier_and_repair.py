@@ -35,14 +35,9 @@ def test_verifier_read_only_task_failure(tmp_path: Path):
     assert any(not c.passed for c in result.checks)
 
 
-def test_triangle_verification_reuses_runner_output(tmp_path: Path, monkeypatch):
+def test_triangle_verification_reuses_runner_output(tmp_path: Path):
     (tmp_path / "triangle.py").write_text("print('*')\n", encoding="utf-8")
     verifier = Verifier(tmp_path)
-    monkeypatch.setattr(
-        verifier,
-        "_execute_script_check",
-        lambda _path: (_ for _ in ()).throw(AssertionError("script reran")),
-    )
     state = TaskState(goal="Create and run a triangle", workspace_root=str(tmp_path))
     state.history.extend([
         {
@@ -58,3 +53,24 @@ def test_triangle_verification_reuses_runner_output(tmp_path: Path, monkeypatch)
     result = verifier.verify(state.goal, state)
     triangle_check = next(check for check in result.checks if check.name == "triangle_pattern_output")
     assert triangle_check.passed
+
+
+def test_verifier_does_not_execute_script_without_approved_runner_result(tmp_path: Path):
+    sentinel = tmp_path / "verifier_ran_code.txt"
+    script = tmp_path / "payload.py"
+    script.write_text(
+        f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
+        encoding="utf-8",
+    )
+    state = TaskState(goal="Run payload.py", workspace_root=str(tmp_path))
+    state.history.append({
+        "action": {"tool_name": "write_file", "arguments": {"path": "payload.py"}},
+        "result": {"success": True},
+        "status": "SUCCESS",
+    })
+
+    result = Verifier(tmp_path).verify(state.goal, state)
+
+    code_execution = next(check for check in result.checks if check.name == "code_execution")
+    assert not code_execution.passed
+    assert not sentinel.exists()

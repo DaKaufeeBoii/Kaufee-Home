@@ -44,7 +44,10 @@ def is_path_safe_and_within_workspace(
     """
     try:
         ws_canonical = workspace_root.resolve()
-        raw_path = Path(target_path)
+        # Treat both common separator characters as separators on every host.
+        # A Windows-style ``..\\..\\secret`` must not become an innocent
+        # filename when the agent runs on POSIX (or vice versa).
+        raw_path = Path(os.fspath(target_path).replace("\\", "/"))
 
         # If path is relative, resolve it relative to workspace_root
         if not raw_path.is_absolute():

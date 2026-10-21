@@ -16,6 +16,7 @@ def test_path_traversal_blocked(tmp_path: Path):
         "../outside.txt",
         "../../etc/passwd",
         "..\\..\\windows\\system32",
+        "..\\..\\outside.txt",
         "sub/../../secret.txt",
     ]
 
@@ -37,6 +38,7 @@ def test_protected_files_blocked(tmp_path: Path):
         "id_rsa",
         "nested/.ssh/known_hosts",
         "windows\\system32\\config",
+        r"nested\.ssh\known_hosts",
     ]
 
     for p in protected_targets:

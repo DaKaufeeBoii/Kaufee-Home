@@ -35,6 +35,11 @@ env/
 *.swo
 .DS_Store
 
+# Local secrets (keep the safe template in version control)
+.env
+.env.*
+!.env.example
+
 # Testing & coverage
 .pytest_cache/
 # Pytest temp data, caches, and local QA build/install artifacts

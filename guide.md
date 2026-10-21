@@ -1,217 +1,279 @@
-# Kaufee-Home User Guide
+# Kaufee-Home: Step-by-Step User Guide
 
-## Windows 10/11
+Follow the section for your device. You do not need to understand Python code to give Kaufee a task. You do need Python installed on the computer that runs Kaufee.
 
-1. Install Python 3.11 or newer and Git.
-2. Open PowerShell and clone the project:
+## 1. Install Kaufee on Windows
+
+1. Install **Python 3.11 or newer** and **Git**. During Python setup, enable the option to add Python to PATH if the installer offers it.
+2. Open **PowerShell**.
+3. Copy and run these commands one at a time:
 
    ```powershell
    git clone https://github.com/DaKaufeeBoii/Kaufee-Home.git
    cd Kaufee-Home
-   ```
-
-3. Create and activate a virtual environment:
-
-   ```powershell
    py -3.11 -m venv .venv
-   .\.venv\Scripts\Activate.ps1
+   .\.venv\Scripts\python.exe -m pip install --upgrade pip
+   .\.venv\Scripts\python.exe -m pip install -e .
    ```
 
-4. Install Kaufee:
+   If `py -3.11` says Python 3.11 is not installed, install a supported Python version or replace `-3.11` with the version you installed, such as `-3.12`.
+
+4. Check that Kaufee installed:
 
    ```powershell
-   python -m pip install --upgrade pip
-   pip install -e .
+   .\.venv\Scripts\kaufee.exe --version
    ```
 
-5. Check the installation and try an offline task:
+5. Try the offline example:
 
    ```powershell
-   kaufee --help
-   kaufee run "List the files in the workspace" --provider mock
+   .\.venv\Scripts\kaufee.exe run "List the files in the workspace" --provider mock
    ```
 
-6. Run your own task:
+## 2. Install Kaufee on macOS or Linux
 
-   ```powershell
-   kaufee run "Create a Python program that prints Hello World"
-   ```
-
-   To create a folder and put a program in it, describe both in the goal. Kaufee creates parent folders for file paths automatically. For example:
-
-   ```powershell
-   kaufee run "Create a folder named test001 and write a Python program in it that reads numbers from the user and prints the largest" --workspace "C:\\Users\\YourName\\KaufeeWork"
-   ```
-
-7. Use `--workspace` to choose where Kaufee works:
-
-   ```powershell
-   kaufee run "List the files in the workspace" --workspace "C:\Users\YourName\Documents\KaufeeWork" --provider mock
-   ```
-
-8. To restore the latest backup for a path:
-
-   ```powershell
-   kaufee undo hello.py
-   ```
-
-## macOS and Linux
-
-1. Install Python 3.11 or newer and Git using your operating system's package manager.
-2. Open a terminal and clone the project:
+1. Install **Python 3.11 or newer** and **Git** using your operating system's normal installer or package manager.
+2. Open **Terminal**.
+3. Copy and run these commands one at a time:
 
    ```bash
    git clone https://github.com/DaKaufeeBoii/Kaufee-Home.git
    cd Kaufee-Home
+   python3 -m venv .venv
+   .venv/bin/python -m pip install --upgrade pip
+   .venv/bin/python -m pip install -e .
    ```
 
-3. Create and activate a virtual environment:
+4. Check that Kaufee installed:
 
    ```bash
-   python3.11 -m venv .venv
-   source .venv/bin/activate
+   .venv/bin/kaufee --version
    ```
 
-4. Install Kaufee:
+5. Try the offline example:
 
    ```bash
-   python -m pip install --upgrade pip
-   pip install -e .
+   .venv/bin/kaufee run "List the files in the workspace" --provider mock
    ```
 
-5. Check the installation and try an offline task:
+## 3. Install Kaufee on a Chromebook or Android device
+
+1. On a Chromebook, turn on the **Linux development environment** in Chromebook settings. On Android, install and open **Termux** from its official distribution source.
+2. Open the Linux Terminal or Termux.
+3. Install Python and Git:
+
+   **Chromebook (Debian-based Linux):**
 
    ```bash
-   kaufee --help
-   kaufee run "List the files in the workspace" --provider mock
+   sudo apt update
+   sudo apt install python3 python3-venv git
    ```
 
-6. Run your own task:
-
-   ```bash
-   kaufee run "Create a Python program that prints Hello World"
-   ```
-
-7. Select a workspace when needed:
-
-   ```bash
-   kaufee run "List the files in the workspace" --workspace "$HOME/KaufeeWork" --provider mock
-   ```
-
-8. Restore the latest backup for a path:
-
-   ```bash
-   kaufee undo hello.py
-   ```
-
-## Chromebook
-
-1. Enable the Linux development environment in Chromebook settings, if available.
-2. Open the Linux Terminal.
-3. Follow the macOS/Linux installation steps above.
-
-## Android with Termux
-
-1. Install and open Termux from a trusted distribution source.
-2. Install Python and Git:
+   **Android (Termux):**
 
    ```bash
    pkg update
    pkg install python git
    ```
 
-3. Clone the project and install it:
+4. Check that `python3 --version` (Chromebook) or `python --version` (Termux) says **3.11 or newer**. If it is older, update Python before continuing.
+5. Clone and install Kaufee. Use the matching commands for your device:
+
+   **Chromebook:**
+
+   ```bash
+   git clone https://github.com/DaKaufeeBoii/Kaufee-Home.git
+   cd Kaufee-Home
+   python3 -m venv .venv
+   .venv/bin/python -m pip install --upgrade pip
+   .venv/bin/python -m pip install -e .
+   ```
+
+   **Android (Termux):**
 
    ```bash
    git clone https://github.com/DaKaufeeBoii/Kaufee-Home.git
    cd Kaufee-Home
    python -m venv .venv
+   .venv/bin/python -m pip install --upgrade pip
+   .venv/bin/python -m pip install -e .
+   ```
+
+6. Test the installation with `.venv/bin/kaufee --version`, then try `.venv/bin/kaufee run "List the files in the workspace" --provider mock`.
+7. Keep the terminal app open while Kaufee works. Some mobile devices may stop background tasks, and small devices may not have enough memory to run a local AI model.
+
+## 4. Use Kaufee from an iPhone, iPad, or another device without Python
+
+Kaufee does not include a website or a native iPhone/iPad app. Run it on a computer or server you control, then connect to that computer from your device using an SSH terminal app.
+
+1. Install Kaufee on the computer or server by following section 1 or 2.
+2. Set up SSH access on that computer using its normal operating-system instructions.
+3. Install an SSH terminal app on your phone or tablet and connect to your computer.
+4. In the remote terminal, go to the Kaufee-Home folder.
+5. Activate the environment on the computer that is running Kaufee:
+
+   **Windows computer (PowerShell):**
+
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+   **macOS/Linux computer:**
+
+   ```bash
    source .venv/bin/activate
-   python -m pip install --upgrade pip
-   pip install -e .
    ```
 
-4. Check it and run a task:
-
-   ```bash
-   kaufee --help
-   kaufee run "List the files in the workspace" --provider mock
-   ```
-
-## iPhone, iPad, or a device that cannot install Python
-
-1. Install an SSH terminal client on the device.
-2. Set up Kaufee on a computer or server you control, following its Windows or macOS/Linux installation steps.
-3. Connect from the device to that computer or server using SSH.
-4. In the remote terminal, change to the project directory and activate its virtual environment.
-5. Run Kaufee on the remote machine:
+6. Run Kaufee in that terminal. The task and files are handled by the computer you connected to, not by the phone or tablet:
 
    ```bash
    kaufee run "List the files in the workspace" --provider mock
    ```
 
-## Choose a language model
+## 5. Choose how Kaufee gets its AI responses
 
-1. Use the mock provider for offline trial runs:
+Use **one** of these options. The `mock` option is only for checking the installation; it cannot handle every kind of task.
+
+### Option A: Quick offline installation check
+
+Run a simple example with no AI model:
+
+```text
+kaufee run "List the files in the workspace" --provider mock
+```
+
+On Windows, if you did not activate the virtual environment, use:
+
+```powershell
+.\.venv\Scripts\kaufee.exe run "List the files in the workspace" --provider mock
+```
+
+### Option B: Use a model on your own computer with Ollama
+
+1. Install Ollama on the computer that runs Kaufee.
+2. Start Ollama. Leave it running while you use Kaufee.
+3. In a terminal, download the default coding model:
 
    ```bash
-   kaufee run "List the files in the workspace" --provider mock
-   ```
-
-2. To use a local Ollama model, install Ollama on the computer running Kaufee, start Ollama, and download a model:
-
-   ```bash
-   ollama serve
    ollama pull qwen2.5-coder:7b
    ```
 
-   Then run Kaufee without `--provider mock`:
+4. Run a real task from the Kaufee-Home folder:
 
-   ```bash
-   kaufee run "Create a Python program that prints Hello World"
+   ```text
+   kaufee run "Create a Python file named hello.py that prints Hello"
    ```
 
-   When Kaufee asks to run generated Python, review the action and approve it only if you trust the task and code. Avoid `--yes` for untrusted goals because it automatically approves risky actions. Python execution is not isolated from your operating-system account.
+Kaufee uses Ollama by default. If your device is slow or does not have enough memory, use a smaller model that Ollama supports, or use a remote model instead.
 
-3. To use a remote OpenAI-compatible provider, set these values in a `.env` file in the project directory:
+### Option C: Use a remote AI provider
+
+1. Open a terminal in the Kaufee-Home folder.
+2. Make a private settings file by copying the example:
+
+   **Windows PowerShell:**
+
+   ```powershell
+   Copy-Item .env.example .env
+   notepad .env
+   ```
+
+   **macOS/Linux/Chromebook/Termux:**
+
+   ```bash
+   cp .env.example .env
+   nano .env
+   ```
+
+3. In `.env`, set the provider and fill in the API key and model name your provider gave you:
 
    ```ini
    KAUFEE_LLM_PROVIDER=remote
    REMOTE_API_BASE_URL=https://api.openai.com/v1
-   REMOTE_API_KEY=your-api-key
+   REMOTE_API_KEY=paste-your-private-key-here
    REMOTE_MODEL=gpt-4o-mini
    ```
 
-4. Run Kaufee with the remote provider:
+4. Save and close the file.
+5. Run a task with the remote provider:
 
-   ```bash
-   kaufee run "Create a Python program that prints Hello World" --provider remote
+   ```text
+   kaufee run "Create a Python file named hello.py that prints Hello" --provider remote
    ```
 
-5. To tune Ollama model residency and response length, optionally add these settings to `.env`:
+6. Never paste your API key into a task, share it in a screenshot, or commit the `.env` file to Git. A remote provider receives the prompts sent to it; use Ollama if you need the prompts to stay on your computer.
 
-   ```ini
-   KAUFEE_OLLAMA_KEEP_ALIVE=10m
-   KAUFEE_OLLAMA_NUM_PREDICT=2048
+## 6. Give Kaufee a task
+
+1. Open a terminal in the Kaufee-Home folder. If you are not in that folder, activate its virtual environment first.
+2. Put your request in quotation marks after `kaufee run`:
+
+   ```text
+   kaufee run "Create a Python file named hello.py that prints Hello"
    ```
 
-   A lower token limit can reduce long generations but may truncate a complex plan.
+3. To choose exactly where Kaufee works, add `--workspace` and a folder path:
 
-## Interactive use
+   **Windows PowerShell:**
 
-1. Start the interactive session:
+   ```powershell
+   kaufee run "List the files in the workspace" --workspace "C:\Users\YourName\KaufeeWork"
+   ```
+
+   **macOS/Linux:**
 
    ```bash
+   kaufee run "List the files in the workspace" --workspace "$HOME/KaufeeWork"
+   ```
+
+4. By default, Kaufee uses a folder named `workspace` under the folder where you run the command.
+5. If you want a **folder**, say “create a folder named …”. If you want a **file inside it**, say that too. Example:
+
+   ```text
+   kaufee run "Create a folder named test001 and create a Python file named largest.py inside it. The program must ask me for numbers and print the largest number."
+   ```
+
+   A folder is created with directory tools; a file is created with file tools. Naming a folder alone does not make it a Python file.
+
+## 7. Approve actions safely
+
+1. Read every approval prompt before answering. It shows the action, risk, and arguments.
+2. Type **yes** only if you understand the action and trust the task. Type **no** or press Enter to reject it.
+3. Kaufee asks for approval before running generated Python and before deleting files by default.
+4. Do not add `--yes` or `-y` unless you intentionally want Kaufee to approve risky actions without asking you.
+5. Generated Python is **not isolated** from your computer. Approved code can use the files, network, and account permissions available to your operating-system user. Do not run tasks or code you do not trust.
+
+## 8. Check results, undo, and exit
+
+1. A green **Task Completed Successfully** result means Kaufee's checks passed. A red **Task Did Not Complete Successfully** result means the task did not pass; read the reason shown in the terminal.
+2. If Kaufee changed a file and you want to restore its latest backup, run:
+
+   ```text
+   kaufee undo hello.py
+   ```
+
+   Add the same `--workspace "path"` option if the file is in a workspace other than the default one. Undo needs a backup created by Kaufee.
+
+3. Useful commands:
+
+   ```text
+   kaufee --help
+   kaufee config
+   kaufee audit
+   kaufee benchmark
    kaufee interactive
    ```
 
-2. Enter a task at the `kaufee>` prompt.
-3. Enter `undo <path>` to restore a backup, or `exit` to close the session.
+4. If you started `kaufee interactive`, type `exit` to close it. Type `help` inside it to see its special commands.
 
-## Other commands
+## 9. Fix common installation problems
 
-```bash
-kaufee benchmark
-kaufee audit
-kaufee config
-```
+1. If the terminal says **`kaufee` is not recognized** or **`command not found`**, either activate the virtual environment or run the Kaufee executable directly:
+
+   **Windows PowerShell:** `.\.venv\Scripts\Activate.ps1`, then run `kaufee ...`; or use `.\.venv\Scripts\kaufee.exe ...`.
+
+   **macOS/Linux/Chromebook/Termux:** `source .venv/bin/activate`, then run `kaufee ...`; or use `.venv/bin/kaufee ...`.
+
+2. If Kaufee cannot connect to Ollama, make sure Ollama is installed and running on the **same computer** that runs Kaufee.
+3. If a task is too slow, use a smaller Ollama model or increase the model request timeout with `--timeout 600`.
+4. If Python reports that a package is missing, return to the Kaufee-Home folder, activate `.venv`, and run `python -m pip install -e .` again.

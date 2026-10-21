@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4
+
+- Ignore local `.env` files so API credentials are not accidentally added to Git; continue tracking `.env.example`.
+- Rewrite `guide.md` as copy-and-paste installation and usage steps for desktop, Chromebook, Android, and SSH-based mobile use.
+
 ## 0.2.3
 
 - Normalize Windows and POSIX path separators before safety checks so traversal and protected-file checks behave consistently across operating systems.

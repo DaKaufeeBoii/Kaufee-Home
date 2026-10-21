@@ -4,6 +4,7 @@
 
 - Normalize Windows and POSIX path separators before safety checks so traversal and protected-file checks behave consistently across operating systems.
 - Add regression coverage for Windows-style traversal and protected paths on every CI platform.
+- Create the gitignored pytest output directory in CI before writing JUnit results on a clean runner.
 
 ## 0.2.2
 

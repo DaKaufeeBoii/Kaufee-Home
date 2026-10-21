@@ -22,6 +22,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install package and test dependencies
         run: python -m pip install -e ".[dev]"
+      - name: Prepare ignored QA output directory
+        run: python -c "from pathlib import Path; Path('pytest__').mkdir(exist_ok=True)"
       - name: Run tests
         run: python -m pytest -q --junitxml=pytest__/junit.xml
       - name: Publish test failure summary

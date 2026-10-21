@@ -37,12 +37,15 @@ env/
 
 # Testing & coverage
 .pytest_cache/
-/pytest__/.pytest_cache/
-/pytest__/
+# Pytest temp data, caches, and local QA build/install artifacts
+pytest__/
 .coverage
+coverage.xml
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
 
 # Kaufee state & audit
 .kaufee/

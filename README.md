@@ -58,10 +58,26 @@ graph TD
 | **Model Adapter** (`src/kaufee/llm/`) | Decoupled client adapters for Ollama, OpenAI-compatible remote APIs, and deterministic mock testing. |
 | **Tool Registry** (`src/kaufee/tools/registry.py`) | Typed schemas, parameter validation, and dynamic tool dispatch. |
 | **Policy Engine** (`src/kaufee/safety/policy.py`) | Checks workspace paths, blocks traversal, disables arbitrary shell by default, and requires approval for generated Python by default. |
+| **Responsible AI & Guardrails** (`src/kaufee/safety/`) | Implements the 6 Responsible AI Principles, prompt injection defenses, circuit breakers, and sensitive data redaction. |
 | **Filesystem Tools** (`src/kaufee/tools/filesystem.py`) | Workspace-bounded `list_files`, `create_directory`, `read_file`, `write_file`, `edit_file`, `move_file`, `delete_file`, and `undo_file`. |
 | **Python Runner** (`src/kaufee/tools/python_runner.py`) | Subprocess execution with strict timeouts, output limits, and unbuffered stdout/stderr capture. |
 | **Verifier** (`src/kaufee/agent/verifier.py`) | Independent AST parsing, exit code inspection, file existence checks, and domain assertion tests. |
-| **Audit Logger & Store** (`src/kaufee/state/`) | Complete persistence of tasks, structured event streams, and metrics tracking. |
+| **Audit Logger & Store** (`src/kaufee/state/`) | Complete persistence of tasks, structured event streams, privacy redaction, and metrics tracking. |
+
+---
+
+## Responsible AI & Safety Principles
+
+Kaufee-Home is engineered around the **6 Core Principles of Responsible AI**:
+
+| Principle | Challenge or Risk | Example | Kaufee-Home Implementation |
+|---|---|---|---|
+| **Fairness** | Algorithmic bias or asymmetric tool dispatch | A model generates biased code or favors specific libraries inconsistently. | Deterministic policy rules and objective verifiers (AST syntax, exit codes) that evaluate code without subjective bias. |
+| **Reliability & Safety** | Errors, runaway loops, or corrupted files cause harm | An agent gets caught in an infinite loop or executes broken code. | Independent verification, safety **circuit breakers** (tripping on repetitive actions), bounded repairs, and atomic writes with automatic backups. |
+| **Privacy & Security** | Private credentials, keys, or files are exposed | An agent leaks API keys in logs or succumbs to indirect prompt injection. | Strict workspace sandboxing (blocking `..` and protected paths like `.env`/`.ssh`), **automated sensitive data redaction** (`[REDACTED_SECRET]`), and **prompt injection guardrails**. |
+| **Inclusiveness** | Cryptic interfaces alienate users | CLI tools only return raw JSON or complex stack traces. | Plain-English progress reporting, human-accessible error diagnostics, and platform portability (Windows, macOS, Linux, Chromebook, Android/Termux). |
+| **Transparency** | Users must understand and trust the agent | An AI performs mutations without explaining its plan or reasoning. | Two-phase planning with visual progress tables, real-time action streaming, and structured JSON audit trails tagging policy principles. Inspect via `kaufee principles`. |
+| **Accountability** | Unclear liability for AI-driven actions | Who is responsible when an autonomous agent deletes files? | Explicit Human-in-the-Loop (HITL) approval gates, tiered **autonomy modes** (`manual`, `assisted`, `autonomous`), and durable audit logging of every decision. |
 
 ---
 

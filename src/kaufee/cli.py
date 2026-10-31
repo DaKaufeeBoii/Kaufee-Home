@@ -14,6 +14,8 @@ from rich.table import Table
 from kaufee import __version__
 from kaufee.agent.controller import AgentController
 from kaufee.config import KaufeeConfig
+from kaufee.safety.principles import ResponsibleAIPrinciple, get_principle_info
+from kaufee.safety.redactor import redact_sensitive_text
 from kaufee.state.audit import AuditLogger
 from kaufee.state.models import PolicyDecision, TaskState, TaskStatus, ToolCall, ToolResult
 from kaufee.tools.workspace import WorkspaceManager
@@ -34,11 +36,12 @@ def create_approval_handler(auto_approve: bool = False):
             console.print(f"[yellow]Auto-approving risky action: {action.tool_name} ({decision.reason})[/yellow]")
             return True
 
+        principle_info = f"\n[bold]Responsible AI Rule:[/bold] [magenta]{decision.principle}[/magenta]" if decision.principle else ""
         console.print(
             Panel(
                 f"[bold yellow]Policy Gate Required for Action:[/bold yellow] [cyan]{action.tool_name}[/cyan]\n"
                 f"[bold]Risk Level:[/bold] {decision.risk_level.value}\n"
-                f"[bold]Reason:[/bold] {decision.reason}\n"
+                f"[bold]Reason:[/bold] {decision.reason}{principle_info}\n"
                 f"[bold]Arguments:[/bold] {json.dumps(action.arguments, indent=2)}",
                 title="[red]Approval Prompt[/red]",
                 border_style="yellow",
@@ -53,7 +56,7 @@ def create_step_reporter():
     """Factory for interactive step callback updating terminal UI."""
     def reporter(event: str, state: TaskState, action: Optional[ToolCall] = None, result: Optional[ToolResult] = None):
         if event == "PLAN_CREATED" and state.plan:
-            table = Table(title="[bold cyan]Execution Plan[/bold cyan]", border_style="cyan")
+            table = Table(title="[bold cyan]Execution Plan (Transparency Principle)[/bold cyan]", border_style="cyan")
             table.add_column("Step", style="bold yellow", width=6)
             table.add_column("Tool", style="green", width=16)
             table.add_column("Description", style="white")
@@ -62,18 +65,29 @@ def create_step_reporter():
                 table.add_row(str(s.step_number), s.tool_name, s.description)
             console.print(table)
 
+        elif event == "GUARDRAIL_BLOCKED":
+            console.print(
+                "[bold red][GUARDRAIL BLOCKED][/bold red] Malicious directive or prompt injection intercepted "
+                "(Responsible AI: Privacy & Security)."
+            )
+
         elif event == "TOOL_EXEC_START" and action:
-            arg_str = ", ".join(f"{k}='{v}'" if not isinstance(v, (dict, list)) else f"{k}=..." for k, v in action.arguments.items())
+            arg_str = ", ".join(
+                f"{k}='{v}'" if not isinstance(v, (dict, list)) else f"{k}=..."
+                for k, v in action.arguments.items()
+            )
             console.print(f"[bold cyan][ACT][/bold cyan]  [green]{action.tool_name}[/green]({arg_str})")
 
         elif event == "TOOL_EXEC_SUCCESS" and result:
             preview = result.output.strip().splitlines()[0] if result.output.strip() else "OK"
+            preview = redact_sensitive_text(preview)
             if len(preview) > 90:
                 preview = preview[:87] + "..."
             console.print(f"      [bold green]+[/bold green] {preview} [dim]({result.execution_time_ms:.1f}ms)[/dim]")
 
         elif event == "TOOL_EXEC_FAILED" and result:
             err = result.error.strip().splitlines()[0] if result.error else "Failed"
+            err = redact_sensitive_text(err)
             console.print(f"      [bold red]x Error:[/bold red] {err}")
 
         elif event == "ACTION_BLOCKED" and action:
@@ -88,16 +102,18 @@ def run(
     workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="LLM provider ('ollama', 'remote', 'mock')."),
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model name."),
-    timeout: int = typer.Option(300, "--timeout", "-t", help="LLM request timeout in seconds (default 300, increase for slow CPU inference)."),
+    mode: Optional[str] = typer.Option(None, "--mode", help="Autonomy mode: 'manual', 'assisted', or 'autonomous'."),
+    timeout: int = typer.Option(300, "--timeout", "-t", help="LLM request timeout in seconds (default 300)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Automatically approve risky actions."),
 ) -> None:
     """Execute a task goal in the workspace."""
-    cfg = KaufeeConfig.load(workspace=workspace, provider=provider, model=model)
+    cfg = KaufeeConfig.load(workspace=workspace, provider=provider, model=model, autonomy_mode=mode)
 
     console.print(
         Panel(
             f"[bold]Goal:[/bold] {goal}\n"
             f"[bold]Workspace:[/bold] {cfg.workspace_root}\n"
+            f"[bold]Autonomy Mode:[/bold] {cfg.autonomy_mode.upper()}\n"
             f"[bold]LLM Provider:[/bold] {cfg.llm_provider} ({cfg.ollama_model if cfg.llm_provider == 'ollama' else cfg.remote_model})",
             title=f"[bold green]Kaufee-Home v{__version__}[/bold green]",
             border_style="green",
@@ -117,7 +133,7 @@ def run(
     # Verification inspection
     if final_state.verification_result:
         v_res = final_state.verification_result
-        console.print("\n[bold cyan][CHECK][/bold cyan] Inspecting verification postconditions:")
+        console.print("\n[bold cyan][CHECK][/bold cyan] Inspecting verification postconditions (Reliability Principle):")
         for check in v_res.checks:
             mark = "[bold green][+][/bold green]" if check.passed else "[bold red][x][/bold red]"
             console.print(f"  {mark} {check.name}: {check.details}")
@@ -133,7 +149,7 @@ def run(
             if out and tname in ("list_files", "read_file", "python_runner"):
                 console.print(
                     Panel(
-                        out,
+                        redact_sensitive_text(out),
                         title=f"[bold cyan]{tname} Output[/bold cyan]",
                         border_style="cyan",
                     )
@@ -167,18 +183,20 @@ def run(
 def interactive(
     workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="LLM provider ('ollama', 'remote', 'mock')."),
+    mode: Optional[str] = typer.Option(None, "--mode", help="Autonomy mode: 'manual', 'assisted', or 'autonomous'."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Auto-approve risky operations."),
 ) -> None:
     """Start an interactive interactive REPL session."""
-    cfg = KaufeeConfig.load(workspace=workspace, provider=provider)
+    cfg = KaufeeConfig.load(workspace=workspace, provider=provider, autonomy_mode=mode)
     controller = AgentController(config=cfg)
 
     console.print(
         Panel(
             f"[bold green]Kaufee-Home Interactive Shell[/bold green] (v{__version__})\n"
             f"Workspace: {cfg.workspace_root}\n"
+            f"Autonomy Mode: {cfg.autonomy_mode.upper()}\n"
             f"Provider: {cfg.llm_provider}\n"
-            "Type your task in plain English. Special commands: [cyan]help[/cyan], [cyan]config[/cyan], [cyan]undo[/cyan], [cyan]exit[/cyan]",
+            "Type your task in plain English. Special commands: [cyan]help[/cyan], [cyan]principles[/cyan], [cyan]config[/cyan], [cyan]undo[/cyan], [cyan]exit[/cyan]",
             border_style="cyan",
         )
     )
@@ -197,7 +215,10 @@ def interactive(
                 console.print("[dim]Goodbye![/dim]")
                 break
             elif cmd_lower == "help":
-                console.print("Commands:\n  config - Show active settings\n  undo <file> - Restore file backup\n  exit - Exit shell")
+                console.print("Commands:\n  principles - Show Responsible AI mapping\n  config - Show active settings\n  undo <file> - Restore file backup\n  exit - Exit shell")
+                continue
+            elif cmd_lower in ("principles", "rai", "/principles"):
+                show_principles()
                 continue
             elif cmd_lower == "config":
                 show_config(cfg)
@@ -223,6 +244,29 @@ def interactive(
             break
 
 
+@app.command("principles")
+def show_principles() -> None:
+    """Display the 6 Responsible AI Principles and how Kaufee-Home enforces each one."""
+    table = Table(
+        title="[bold green]Principles of Responsible AI in Kaufee-Home[/bold green]",
+        border_style="cyan",
+    )
+    table.add_column("Principle", style="bold yellow", width=22)
+    table.add_column("Challenge or Risk", style="bold red", width=26)
+    table.add_column("Example", style="white", width=34)
+    table.add_column("Kaufee-Home Mitigation", style="green", width=42)
+
+    for p in ResponsibleAIPrinciple:
+        info = get_principle_info(p)
+        table.add_row(
+            info["title"],
+            info["challenge_or_risk"],
+            info["example"],
+            info["agentic_mitigation"],
+        )
+    console.print(table)
+
+
 @app.command("config")
 def config_command(
     workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
@@ -238,6 +282,7 @@ def show_config(cfg: KaufeeConfig) -> None:
     table.add_column("Value", style="green")
 
     table.add_row("Workspace Root", str(cfg.workspace_root))
+    table.add_row("Autonomy Mode", cfg.autonomy_mode)
     table.add_row("LLM Provider", cfg.llm_provider)
     table.add_row("Ollama Base URL", cfg.ollama_base_url)
     table.add_row("Ollama Model", cfg.ollama_model)
@@ -247,7 +292,11 @@ def show_config(cfg: KaufeeConfig) -> None:
     table.add_row("Max Repairs", str(cfg.max_repairs))
     table.add_row("Step Timeout (s)", str(cfg.step_timeout))
     table.add_row("Require Approval For Delete", str(cfg.require_approval_for_delete))
+    table.add_row("Require Approval For Python", str(cfg.require_approval_for_python))
     table.add_row("Allow Arbitrary Shell", str(cfg.allow_arbitrary_shell))
+    table.add_row("Prompt Injection Guard", str(cfg.enable_prompt_injection_guard))
+    table.add_row("Sensitive Data Redaction", str(cfg.enable_sensitive_data_redaction))
+    table.add_row("Circuit Breaker Repetition Threshold", str(cfg.circuit_breaker_threshold))
     table.add_row("Audit Log Directory", str(cfg.audit_dir))
     table.add_row("Backup Directory", str(cfg.backup_dir))
 
@@ -275,7 +324,8 @@ def audit(
         records = AuditLogger.load_task_records(log_files[0])
         console.print(f"[bold cyan]Audit Log for Task {task_id}:[/bold cyan] ({len(records)} events)")
         for r in records:
-            console.print(f"[dim]{r.timestamp}[/dim] [bold yellow]{r.event_type}[/bold yellow] {json.dumps(r.details)}")
+            p_badge = f"[magenta][{r.principle}][/magenta] " if r.principle else ""
+            console.print(f"[dim]{r.timestamp}[/dim] [bold yellow]{r.event_type}[/bold yellow] {p_badge}{json.dumps(r.details)}")
     else:
         table = Table(title="Recent Task Audits", border_style="cyan")
         table.add_column("Task ID", style="bold green")

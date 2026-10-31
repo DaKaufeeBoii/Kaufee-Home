@@ -33,6 +33,13 @@ class StepStatus(str, Enum):
     SKIPPED = "SKIPPED"
 
 
+class AutonomyMode(str, Enum):
+    """Autonomy level governing agent execution and human oversight."""
+    MANUAL = "manual"        # Every mutating action requires explicit approval
+    ASSISTED = "assisted"    # High-risk/destructive actions require approval (default)
+    AUTONOMOUS = "autonomous"  # Safe actions run within policy boundaries without prompt
+
+
 class RiskLevel(str, Enum):
     """Risk classification for policy assessment."""
     SAFE = "SAFE"
@@ -48,6 +55,7 @@ class PolicyDecision(BaseModel):
     requires_approval: bool = False
     reason: str
     risk_level: RiskLevel = RiskLevel.SAFE
+    principle: Optional[str] = None
 
 
 class ToolCall(BaseModel):
@@ -107,6 +115,7 @@ class AuditRecord(BaseModel):
     task_id: str
     event_type: str  # e.g., "TASK_START", "POLICY_CHECK", "TOOL_EXEC", "APPROVAL", "VERIFY"
     details: dict[str, Any] = Field(default_factory=dict)
+    principle: Optional[str] = None
 
 
 class TaskState(BaseModel):

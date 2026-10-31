@@ -6,26 +6,37 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from kaufee.safety.redactor import redact_data
 from kaufee.state.models import AuditRecord
 
 
 class AuditLogger:
-    """Records structured audit events to file and memory."""
+    """Records structured, privacy-safe audit events to file and memory."""
 
-    def __init__(self, audit_dir: Path, task_id: str):
+    def __init__(self, audit_dir: Path, task_id: str, enable_redaction: bool = True):
         self.audit_dir = audit_dir
         self.task_id = task_id
+        self.enable_redaction = enable_redaction
         self.audit_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.audit_dir / f"{task_id}.audit.json"
         self.records: list[AuditRecord] = []
 
-    def log(self, event_type: str, details: Optional[dict[str, Any]] = None) -> AuditRecord:
-        """Log a new audit record to file and memory."""
+    def log(
+        self,
+        event_type: str,
+        details: Optional[dict[str, Any]] = None,
+        principle: Optional[str] = None,
+    ) -> AuditRecord:
+        """Log a new audit record to file and memory with privacy redaction."""
+        raw_details = details or {}
+        sanitized_details = redact_data(raw_details) if self.enable_redaction else raw_details
+
         record = AuditRecord(
             task_id=self.task_id,
             timestamp=datetime.now(timezone.utc).isoformat(),
             event_type=event_type,
-            details=details or {},
+            details=sanitized_details,
+            principle=principle,
         )
         self.records.append(record)
         self._write_to_disk(record)
@@ -52,6 +63,7 @@ class AuditLogger:
             r for r in self.records if r.event_type == "POLICY_DECISION" and not r.details.get("allowed")
         ]
         approvals = [r for r in self.records if r.event_type == "APPROVAL_PROMPT"]
+        principles_tagged = list({r.principle for r in self.records if r.principle})
 
         return {
             "task_id": self.task_id,
@@ -61,6 +73,7 @@ class AuditLogger:
             "tool_calls_failed": len(tool_failed),
             "policy_blocked_actions": len(policy_blocked),
             "approval_requests": len(approvals),
+            "principles_involved": sorted(principles_tagged),
             "log_path": str(self.log_file),
         }
 

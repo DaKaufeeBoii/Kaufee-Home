@@ -694,8 +694,9 @@ def run_full_benchmark(
     console.print(f"[bold green]       Kaufee-Home v{__version__} -- 20-Task Evaluation Benchmark Suite       [/bold green]")
     console.print("[bold cyan]=================================================================[/bold cyan]\n")
 
+    import tempfile
     tasks = build_benchmark_tasks()
-    base_tmp = (workspace_override or Path("./.kaufee/benchmarks")).resolve()
+    base_tmp = (workspace_override or Path(tempfile.gettempdir()) / "kaufee_benchmarks").resolve()
     base_tmp.mkdir(parents=True, exist_ok=True)
 
     results: list[TaskMetricResult] = []

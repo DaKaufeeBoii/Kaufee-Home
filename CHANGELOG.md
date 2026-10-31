@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.5
+
+- Implement end-to-end Responsible AI architecture mapping to the 6 core principles: Fairness, Reliability & Safety, Privacy & Security, Inclusiveness, Transparency, and Accountability.
+- Add `kaufee principles` CLI command to display the Responsible AI principle matrix and runtime mitigations.
+- Introduce tiered Autonomy Modes (`--mode manual`, `assisted`, `autonomous`) enforcing granular human oversight.
+- Add `SensitiveDataRedactor` to sanitize passwords, tokens, API keys, private keys, and PII in audit logs and console outputs.
+- Add `PromptInjectionGuard` detecting and intercepting direct and indirect instruction overrides and jailbreaks.
+- Add `AgentCircuitBreaker` detecting repetitive loops and cascading tool failures to prevent runaway execution.
+- Tag all policy decisions and audit records with their governing Responsible AI principles.
+- Update benchmark workspace isolation to prevent collision with application security path filters.
+
 ## 0.2.4
 
 - Ignore local `.env` files so API credentials are not accidentally added to Git; continue tracking `.env.example`.

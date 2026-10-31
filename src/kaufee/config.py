@@ -100,7 +100,11 @@ class KaufeeConfig(BaseModel):
         description="Maximum bytes captured from command or file output.",
     )
 
-    # Safety
+    # Safety & Responsible AI
+    autonomy_mode: str = Field(
+        default="assisted",
+        description="Autonomy mode: 'manual' (approve all mutating), 'assisted' (approve high-risk), or 'autonomous'.",
+    )
     require_approval_for_delete: bool = Field(
         default=True,
         description="Require explicit user approval before deleting workspace files.",
@@ -116,6 +120,20 @@ class KaufeeConfig(BaseModel):
     allow_arbitrary_shell: bool = Field(
         default=False,
         description="Whether arbitrary shell commands are allowed (disabled by default).",
+    )
+    enable_prompt_injection_guard: bool = Field(
+        default=True,
+        description="Enable detection and blocking of prompt injection and malicious directives.",
+    )
+    enable_sensitive_data_redaction: bool = Field(
+        default=True,
+        description="Redact credentials, tokens, and PII from logs and console outputs.",
+    )
+    circuit_breaker_threshold: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Repetitive action count before tripping safety circuit breaker.",
     )
 
     # Storage and Audit
@@ -135,6 +153,7 @@ class KaufeeConfig(BaseModel):
         workspace: Optional[Path | str] = None,
         provider: Optional[str] = None,
         model: Optional[str] = None,
+        autonomy_mode: Optional[str] = None,
     ) -> KaufeeConfig:
         """Load configuration from environment, .env file, and explicit overrides."""
         # Check standard .env locations
@@ -150,6 +169,10 @@ class KaufeeConfig(BaseModel):
         ws_path = Path(ws_str).resolve()
 
         chosen_provider = provider or get_val("KAUFEE_LLM_PROVIDER", "ollama")
+        chosen_mode = (
+            autonomy_mode
+            or get_val("KAUFEE_AUTONOMY_MODE", "assisted")
+        ).lower()
 
         ollama_url = get_val("OLLAMA_BASE_URL", "http://localhost:11434")
         ollama_keep_alive = get_val("KAUFEE_OLLAMA_KEEP_ALIVE", "10m")
@@ -174,6 +197,10 @@ class KaufeeConfig(BaseModel):
         req_python_appr = get_val("KAUFEE_REQUIRE_APPROVAL_FOR_PYTHON", "true").lower() in ("1", "true", "yes")
         allow_shell = get_val("KAUFEE_ALLOW_ARBITRARY_SHELL", "false").lower() in ("1", "true", "yes")
 
+        prompt_inj_guard = get_val("KAUFEE_PROMPT_INJECTION_GUARD", "true").lower() in ("1", "true", "yes")
+        sensitive_redact = get_val("KAUFEE_SENSITIVE_REDACTION", "true").lower() in ("1", "true", "yes")
+        circuit_thresh = int(get_val("KAUFEE_CIRCUIT_BREAKER_THRESHOLD", "3"))
+
         audit_dir_str = get_val("KAUFEE_AUDIT_LOG_DIR", "./.kaufee/audit")
         audit_path = Path(audit_dir_str).resolve()
         backup_path = Path("./.kaufee/backups").resolve()
@@ -181,6 +208,7 @@ class KaufeeConfig(BaseModel):
         return cls(
             workspace_root=ws_path,
             llm_provider=chosen_provider,
+            autonomy_mode=chosen_mode,
             ollama_base_url=ollama_url,
             ollama_model=ollama_mdl,
             ollama_keep_alive=ollama_keep_alive,
@@ -196,6 +224,9 @@ class KaufeeConfig(BaseModel):
             require_approval_for_install=req_inst_appr,
             require_approval_for_python=req_python_appr,
             allow_arbitrary_shell=allow_shell,
+            enable_prompt_injection_guard=prompt_inj_guard,
+            enable_sensitive_data_redaction=sensitive_redact,
+            circuit_breaker_threshold=circuit_thresh,
             audit_dir=audit_path,
             backup_dir=backup_path,
         )

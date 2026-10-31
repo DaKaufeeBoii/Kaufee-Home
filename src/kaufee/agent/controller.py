@@ -91,7 +91,11 @@ class AgentController:
         self._current_state = state
         self._cancellation_event.clear()
 
-        audit_logger = AuditLogger(self.config.audit_dir, state.task_id)
+        audit_logger = AuditLogger(
+            self.config.audit_dir,
+            state.task_id,
+            enable_redaction=self.config.enable_sensitive_data_redaction,
+        )
 
         loop = AgentLoop(
             planner=self.planner,

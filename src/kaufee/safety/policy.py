@@ -6,21 +6,23 @@ from pathlib import Path
 from typing import Any
 from kaufee.config import KaufeeConfig
 from kaufee.safety.permissions import is_path_safe_and_within_workspace
+from kaufee.safety.principles import ResponsibleAIPrinciple
 from kaufee.state.models import PolicyDecision, RiskLevel, ToolCall
 
 
 class PolicyEngine:
-    """Enforces safety rules, workspace boundaries, and approval requirements."""
+    """Enforces safety rules, workspace boundaries, autonomy modes, and Responsible AI principles."""
 
     def __init__(self, config: KaufeeConfig):
         self.config = config
 
     def validate(self, action: ToolCall, workspace_root: Path) -> PolicyDecision:
-        """Validate proposed action against security policy and workspace boundary."""
+        """Validate proposed action against security policy, workspace boundary, and autonomy level."""
         tool_name = action.tool_name.lower().strip()
         args = action.arguments or {}
+        autonomy = (self.config.autonomy_mode or "assisted").lower()
 
-        # 1. Block arbitrary shell by default
+        # 1. Block arbitrary shell by default (Reliability & Safety)
         if tool_name in ("run_shell", "bash", "cmd", "powershell", "execute_command"):
             if not self.config.allow_arbitrary_shell:
                 return PolicyDecision(
@@ -28,32 +30,45 @@ class PolicyEngine:
                     requires_approval=False,
                     reason="Arbitrary shell execution is disabled by default in Kaufee-Home.",
                     risk_level=RiskLevel.CRITICAL,
+                    principle=ResponsibleAIPrinciple.RELIABILITY_AND_SAFETY.value,
                 )
             return PolicyDecision(
                 allowed=True,
                 requires_approval=True,
                 reason="Shell execution requires explicit user authorization.",
                 risk_level=RiskLevel.HIGH,
+                principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
             )
 
-        # 2. Package installation
+        # 2. Package installation (Reliability & Safety / Accountability)
         if tool_name in ("install_package", "pip_install"):
-            if self.config.require_approval_for_install:
+            req_appr = self.config.require_approval_for_install if autonomy != "autonomous" else False
+            if req_appr or autonomy == "manual":
                 return PolicyDecision(
                     allowed=True,
                     requires_approval=True,
                     reason="Package installation requires explicit user approval.",
                     risk_level=RiskLevel.HIGH,
+                    principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
                 )
             return PolicyDecision(
                 allowed=True,
                 requires_approval=False,
                 reason="Package installation allowed per configuration.",
                 risk_level=RiskLevel.MEDIUM,
+                principle=ResponsibleAIPrinciple.RELIABILITY_AND_SAFETY.value,
             )
 
-        # 3. Path-based filesystem tools
-        path_keys = ["path", "file_path", "source_path", "destination_path", "source", "destination", "directory"]
+        # 3. Path-based filesystem tools (Privacy & Security)
+        path_keys = [
+            "path",
+            "file_path",
+            "source_path",
+            "destination_path",
+            "source",
+            "destination",
+            "directory",
+        ]
         for key in path_keys:
             if key in args and isinstance(args[key], (str, Path)):
                 target = args[key]
@@ -71,25 +86,29 @@ class PolicyEngine:
                         requires_approval=False,
                         reason=reason,
                         risk_level=RiskLevel.LOW if invalid_target else RiskLevel.CRITICAL,
+                        principle=ResponsibleAIPrinciple.PRIVACY_AND_SECURITY.value,
                     )
 
-        # 4. Destructive file operations
+        # 4. Destructive file operations (Accountability & Reliability)
         if tool_name in ("delete_file", "delete_directory", "remove_file"):
-            if self.config.require_approval_for_delete:
+            req_del = self.config.require_approval_for_delete if autonomy != "autonomous" else False
+            if req_del or autonomy == "manual":
                 return PolicyDecision(
                     allowed=True,
                     requires_approval=True,
                     reason=f"Deleting '{args.get('path')}' is destructive and requires explicit approval.",
                     risk_level=RiskLevel.HIGH,
+                    principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
                 )
             return PolicyDecision(
                 allowed=True,
                 requires_approval=False,
                 reason="File deletion permitted per configuration.",
                 risk_level=RiskLevel.MEDIUM,
+                principle=ResponsibleAIPrinciple.RELIABILITY_AND_SAFETY.value,
             )
 
-        # 5. Python execution tool
+        # 5. Python execution tool (Accountability & Safety)
         if tool_name in ("python_runner", "run_python", "execute_python"):
             script_path = args.get("script_path")
             if script_path:
@@ -102,8 +121,13 @@ class PolicyEngine:
                         requires_approval=False,
                         reason=reason,
                         risk_level=RiskLevel.CRITICAL,
+                        principle=ResponsibleAIPrinciple.PRIVACY_AND_SECURITY.value,
                     )
-            requires_approval = self.config.require_approval_for_python
+            requires_approval = (
+                True
+                if autonomy == "manual"
+                else (False if autonomy == "autonomous" else self.config.require_approval_for_python)
+            )
             return PolicyDecision(
                 allowed=True,
                 requires_approval=requires_approval,
@@ -114,32 +138,57 @@ class PolicyEngine:
                     else "Python execution allowed per configuration; generated code retains the current user's OS permissions."
                 ),
                 risk_level=RiskLevel.HIGH if requires_approval else RiskLevel.MEDIUM,
+                principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
             )
 
-        # 6. Read / Write / Edit / List files
+        # 6. Read / Write / Edit / List files / Move
         if tool_name in (
-            "read_file", "write_file", "edit_file", "list_files", "create_directory", "move_file", "undo_file"
+            "read_file",
+            "write_file",
+            "edit_file",
+            "list_files",
+            "create_directory",
+            "move_file",
+            "undo_file",
         ):
             if tool_name == "move_file" and args.get("overwrite", False):
+                req_move = self.config.require_approval_for_delete if autonomy != "autonomous" else False
+                requires_approval = req_move or autonomy == "manual"
                 return PolicyDecision(
                     allowed=True,
-                    requires_approval=self.config.require_approval_for_delete,
-                    reason="Replacing a destination file is destructive and requires explicit approval."
-                    if self.config.require_approval_for_delete
-                    else "Move permitted; destination overwrite is enabled by configuration.",
-                    risk_level=RiskLevel.HIGH if self.config.require_approval_for_delete else RiskLevel.MEDIUM,
+                    requires_approval=requires_approval,
+                    reason=(
+                        "Replacing a destination file is destructive and requires explicit approval."
+                        if requires_approval
+                        else "Move permitted; destination overwrite is enabled by configuration."
+                    ),
+                    risk_level=RiskLevel.HIGH if requires_approval else RiskLevel.MEDIUM,
+                    principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
                 )
+
+            # Manual autonomy mode requires approval for any mutating action
+            if autonomy == "manual" and tool_name in ("write_file", "edit_file", "move_file", "create_directory"):
+                return PolicyDecision(
+                    allowed=True,
+                    requires_approval=True,
+                    reason=f"Action '{tool_name}' requires approval in manual autonomy mode.",
+                    risk_level=RiskLevel.MEDIUM,
+                    principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+                )
+
             return PolicyDecision(
                 allowed=True,
                 requires_approval=False,
                 reason=f"Operation '{tool_name}' permitted within workspace boundary.",
                 risk_level=RiskLevel.SAFE,
+                principle=ResponsibleAIPrinciple.TRANSPARENCY.value,
             )
 
-        # Unknown tool
+        # Unknown tool (Reliability & Safety)
         return PolicyDecision(
             allowed=False,
             requires_approval=False,
             reason=f"Unrecognized or unregistered tool '{tool_name}'.",
             risk_level=RiskLevel.CRITICAL,
+            principle=ResponsibleAIPrinciple.RELIABILITY_AND_SAFETY.value,
         )

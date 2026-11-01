@@ -259,11 +259,47 @@ def interactive(
                 console.print("[dim]Goodbye![/dim]")
                 break
             elif cmd_lower == "help":
-                console.print("Commands:\n  dashboard  - Open in-terminal TUI dashboard\n  principles - Show Responsible AI mapping\n  config     - Show active settings\n  undo <file>- Restore file backup\n  exit       - Exit shell")
+                console.print(
+                    "Commands:\n"
+                    "  dashboard    - Open in-terminal TUI dashboard\n"
+                    "  web          - Launch local web browser dashboard\n"
+                    "  grant <dur>  - Grant temporary workspace access (e.g. 'grant 15m')\n"
+                    "  grants       - List active scoped grants\n"
+                    "  principles   - Show Responsible AI mapping\n"
+                    "  config       - Show active settings\n"
+                    "  undo <file>  - Restore file backup\n"
+                    "  exit         - Exit shell"
+                )
                 continue
             elif cmd_lower in ("dashboard", "tui"):
                 from kaufee.ui.dashboard import run_dashboard
                 run_dashboard(cfg)
+                continue
+            elif cmd_lower in ("web", "ui"):
+                from kaufee.ui.web import LocalDashboardServer
+                web_srv = LocalDashboardServer(cfg, port=8765)
+                web_srv.start(open_browser=True)
+                console.print("[green]Web dashboard launched at http://127.0.0.1:8765[/green]")
+                continue
+            elif cmd_lower.startswith("grant ") or cmd_lower == "grant":
+                parts = user_input.split(maxsplit=1)
+                if len(parts) > 1:
+                    dur = parts[1].strip()
+                    try:
+                        g = controller.grants.grant("workspace", dur)
+                        console.print(f"[green]Granted workspace access for {g.remaining_seconds:.0f}s[/green]")
+                    except Exception as err:
+                        console.print(f"[red]Error parsing grant duration: {err}[/red]")
+                else:
+                    console.print("[yellow]Usage: grant <duration> (e.g., 'grant 15m')[/yellow]")
+                continue
+            elif cmd_lower == "grants":
+                active_g = controller.grants.list_active_grants()
+                if not active_g:
+                    console.print("[dim]No active scoped grants.[/dim]")
+                else:
+                    for g in active_g:
+                        console.print(f"  [cyan]{g.scope}[/cyan]: {g.remaining_seconds:.1f}s remaining ({g.description})")
                 continue
             elif cmd_lower in ("principles", "rai", "/principles"):
                 show_principles()
@@ -457,7 +493,7 @@ def benchmark(
     workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root for benchmark."),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed step logs."),
 ) -> None:
-    """Run the 20-task evaluation benchmark suite and report metrics."""
+    """Run the 25-task evaluation benchmark suite and report metrics."""
     from kaufee.evaluation.benchmark import run_full_benchmark
     run_full_benchmark(workspace_override=workspace, verbose=verbose)
 

@@ -74,3 +74,21 @@ def test_docker_runner_command_construction(tmp_path: Path):
             assert "hello.py" in called_cmd
             assert "--verbose" in called_cmd
             assert meta["runner"] == "docker"
+
+
+def test_docker_runner_windows_daemon_detection():
+    dock = DockerRunner(image="python:3.11-slim")
+    mock_docker_info = "Containers: 0\nOSType: windows\nArchitecture: x86_64\n"
+    with patch("shutil.which", return_value="docker"):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=mock_docker_info)
+            assert dock.is_available() is False
+
+    dock_linux = DockerRunner(image="python:3.11-slim")
+    mock_docker_info_linux = "Containers: 0\nOSType: linux\nArchitecture: x86_64\n"
+    with patch("platform.system", return_value="Linux"):
+        with patch("shutil.which", return_value="docker"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout=mock_docker_info_linux)
+                assert dock_linux.is_available() is True
+

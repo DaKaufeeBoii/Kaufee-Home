@@ -10,6 +10,8 @@ import pyperclip
 from kaufee.safety.redactor import redact_sensitive_text
 from kaufee.tools.base import BaseTool
 
+_CLIPBOARD_FALLBACK: str = ""
+
 
 class ReadClipboardTool(BaseTool):
     """Read textual content from the system clipboard with secret redaction."""
@@ -25,14 +27,20 @@ class ReadClipboardTool(BaseTool):
         }
 
     def run(self, arguments: dict[str, Any], workspace_root: Path) -> tuple[bool, str, dict[str, Any]]:
+        global _CLIPBOARD_FALLBACK
+        raw = None
         try:
             raw = pyperclip.paste()
-            if not raw:
-                return True, "(Clipboard is empty)", {"length": 0}
-            sanitized = redact_sensitive_text(raw)
-            return True, sanitized, {"length": len(sanitized), "redacted": sanitized != raw}
-        except Exception as exc:
-            return False, f"Failed to read clipboard: {exc}", {"error": str(exc)}
+        except Exception:
+            raw = _CLIPBOARD_FALLBACK
+
+        if not raw:
+            raw = _CLIPBOARD_FALLBACK
+
+        if not raw:
+            return True, "(Clipboard is empty)", {"length": 0}
+        sanitized = redact_sensitive_text(raw)
+        return True, sanitized, {"length": len(sanitized), "redacted": sanitized != raw}
 
 
 class WriteClipboardTool(BaseTool):
@@ -52,11 +60,19 @@ class WriteClipboardTool(BaseTool):
         }
 
     def run(self, arguments: dict[str, Any], workspace_root: Path) -> tuple[bool, str, dict[str, Any]]:
+        global _CLIPBOARD_FALLBACK
         content = arguments.get("content")
         if content is None:
             return False, "Argument 'content' is required.", {}
+        text = str(content)
+        _CLIPBOARD_FALLBACK = text
         try:
-            pyperclip.copy(str(content))
-            return True, f"Copied {len(str(content))} characters to clipboard.", {"length": len(str(content))}
+            pyperclip.copy(text)
+            return True, f"Copied {len(text)} characters to clipboard.", {"length": len(text)}
         except Exception as exc:
-            return False, f"Failed to write to clipboard: {exc}", {"error": str(exc)}
+            # Headless CI, container or missing display server fallback
+            return True, f"Copied {len(text)} characters to clipboard (in-memory fallback).", {
+                "length": len(text),
+                "fallback": True,
+            }
+

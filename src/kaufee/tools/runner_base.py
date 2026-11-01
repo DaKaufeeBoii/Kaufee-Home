@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -222,7 +223,29 @@ class DockerRunner(BaseExecutionRunner):
                 text=True,
                 timeout=3.0,
             )
-            self._available = res.returncode == 0
+            if res.returncode != 0:
+                self._available = False
+                return False
+
+            # Inspect daemon OSType
+            daemon_ostype = ""
+            for line in (res.stdout or "").splitlines():
+                stripped = line.strip().lower()
+                if stripped.startswith("ostype:"):
+                    daemon_ostype = stripped.split(":", 1)[1].strip()
+                    break
+
+            # If the daemon is in Windows container mode, it cannot run Linux container images
+            if daemon_ostype == "windows" and "windows" not in self.image.lower():
+                self._available = False
+                return False
+
+            # On Windows hosts, the Docker daemon must explicitly support Linux containers
+            if platform.system() == "Windows" and daemon_ostype != "linux" and "windows" not in self.image.lower():
+                self._available = False
+                return False
+
+            self._available = True
         except Exception:
             self._available = False
         return self._available

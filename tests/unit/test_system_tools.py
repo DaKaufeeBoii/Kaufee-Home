@@ -67,7 +67,7 @@ def test_list_processes_tool(tmp_path: Path):
 def test_desktop_notification_tool_mocked(tmp_path: Path):
     tool = DesktopNotificationTool()
 
-    with patch("subprocess.Popen") as mock_popen:
+    with patch("shutil.which", return_value="/usr/bin/notify-send"), patch("subprocess.Popen") as mock_popen:
         success, output, meta = tool.run(
             {"title": "Test Title", "message": "Test notification message"},
             tmp_path,
@@ -75,3 +75,15 @@ def test_desktop_notification_tool_mocked(tmp_path: Path):
         assert success is True
         assert "Test notification message" in output
         assert mock_popen.called
+
+
+def test_desktop_notification_tool_headless_linux(tmp_path: Path):
+    tool = DesktopNotificationTool()
+
+    with patch("platform.system", return_value="Linux"), patch("shutil.which", return_value=None):
+        success, output, meta = tool.run(
+            {"title": "Test Title", "message": "Test notification message"},
+            tmp_path,
+        )
+        assert success is True
+        assert "Test notification message" in output

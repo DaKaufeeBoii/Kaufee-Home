@@ -61,3 +61,19 @@ def test_clipboard_read_and_write_with_redaction(tmp_path: Path):
         assert "[REDACTED_SECRET]" in out_sec
         assert "sk-proj-1234567890abcdef1234567890abcdef" not in out_sec
         assert meta_sec["redacted"] is True
+
+
+def test_clipboard_headless_fallback(tmp_path: Path):
+    read_tool = ReadClipboardTool()
+    write_tool = WriteClipboardTool()
+
+    # Simulate headless environment where pyperclip fails
+    with patch("pyperclip.copy", side_effect=Exception("PyperclipException: no display")):
+        with patch("pyperclip.paste", side_effect=Exception("PyperclipException: no display")):
+            success_w, out_w, meta_w = write_tool.run({"content": "In-Memory Buffer Data"}, tmp_path)
+            assert success_w is True
+            assert meta_w.get("fallback") is True
+
+            success_r, out_r, meta_r = read_tool.run({}, tmp_path)
+            assert success_r is True
+            assert out_r == "In-Memory Buffer Data"

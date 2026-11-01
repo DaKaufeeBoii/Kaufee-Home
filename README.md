@@ -65,6 +65,9 @@ graph TD
 | **Audit Logger & Store** (`src/kaufee/state/`) | Complete persistence of tasks, structured event streams, privacy redaction, and metrics tracking. |
 | **Browser Automation Tools** (`src/kaufee/tools/browser.py`) | Web page navigation, content scraping with secret redaction, and downloads via Playwright / HTTP. |
 | **In-Terminal TUI Dashboard** (`src/kaufee/ui/dashboard.py`) | Interactive Textual terminal dashboard for exploring tasks, audit logs, and Responsible AI telemetry. |
+| **Model Context Protocol (MCP)** (`src/kaufee/mcp/`) | External stdio JSON-RPC tool integrations with schema discovery and policy authorization. |
+| **Pluggable Execution Runners** (`src/kaufee/tools/runner_base.py`) | Subprocess runner and network-isolated Docker sandbox (`--network none`, memory quotas). |
+| **Two-Tier Hybrid Router** (`src/kaufee/llm/router.py`) | Local-first model execution ($0 cost) with automatic escalation to cloud frontier models. |
 
 ---
 
@@ -263,7 +266,7 @@ kaufee run "Create a Python program that draws a triangle, run it, and fix any e
 Example terminal session:
 ```
 ======================================================================
-Kaufee-Home v0.3.0
+Kaufee-Home v0.4.0
 Goal: Create a Python program that draws a triangle, run it, and fix any errors.
 Workspace: D:\Kaufee\padhai\7th-sem\Agentic-AI\Agentic-AI-Kaufee\workspace
 LLM Provider: ollama (qwen2.5-coder:7b)
@@ -351,7 +354,44 @@ Example:
 kaufee run "Scrape the release notes from https://example.com/notes and save a summary to notes.txt"
 ```
 
-### 8. Revert Changes (`kaufee undo`)
+### 8. Model Context Protocol (MCP) Integration
+
+Kaufee supports external tool servers compliant with the standard Model Context Protocol (MCP). Define external servers in `.kaufee/mcp_servers.json`:
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"]
+    }
+  }
+}
+```
+External tools are automatically discovered and registered with the namespace `mcp__<server>__<tool>`. Every MCP tool invocation is validated by Kaufee's `PolicyEngine` to guarantee workspace path safety and human oversight.
+
+### 9. Docker Sandboxed Execution (`--runner docker|auto|subprocess`)
+
+Run generated code inside a strictly isolated, ephemeral Docker container:
+```bash
+kaufee run "Calculate statistical summary" --runner docker
+```
+- Completely cuts off network access (`--network none`) to prevent unauthorized data exfiltration.
+- Mounts only the configured workspace directory (`-v <workspace>:/workspace`).
+- Enforces container memory (`512m`) and CPU (`1.0`) quotas.
+- Gracefully falls back to bounded subprocess execution if Docker is not running when set to `auto` (default).
+
+### 10. Two-Tier Hybrid LLM Routing (`--provider hybrid`)
+
+Run routine planning and tool execution using a local model with $0 marginal cost, while automatically escalating difficult code repairs or recovering from local service interruptions via a cloud frontier model:
+```bash
+kaufee run "Build an optimized LRU cache with tests" --provider hybrid
+```
+
+### 11. Revert Changes (`kaufee undo`)
 
 ```bash
 kaufee undo triangle.py

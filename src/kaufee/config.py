@@ -93,6 +93,10 @@ class KaufeeConfig(BaseModel):
         le=120,
         description="Timeout in seconds for external process execution.",
     )
+    runner_type: str = Field(
+        default="auto",
+        description="Python execution runner: 'auto', 'subprocess', or 'docker'.",
+    )
     max_output_bytes: int = Field(
         default=50000,
         ge=1,
@@ -199,6 +203,7 @@ class KaufeeConfig(BaseModel):
         max_steps = int(get_val("KAUFEE_MAX_STEPS", "12"))
         max_repairs = int(get_val("KAUFEE_MAX_REPAIRS", "3"))
         step_timeout = int(get_val("KAUFEE_STEP_TIMEOUT", "15"))
+        runner_type = get_val("KAUFEE_RUNNER_TYPE", "auto").lower()
         max_out_bytes = int(get_val("KAUFEE_MAX_OUTPUT_BYTES", "50000"))
 
         req_del_appr = get_val("KAUFEE_REQUIRE_APPROVAL_FOR_DELETE", "true").lower() in ("1", "true", "yes")
@@ -229,6 +234,7 @@ class KaufeeConfig(BaseModel):
             max_steps=max_steps,
             max_repairs=max_repairs,
             step_timeout=step_timeout,
+            runner_type=runner_type,
             max_output_bytes=max_out_bytes,
             require_approval_for_delete=req_del_appr,
             require_approval_for_install=req_inst_appr,

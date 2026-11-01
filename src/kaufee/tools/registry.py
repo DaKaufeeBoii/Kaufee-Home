@@ -72,8 +72,12 @@ class ToolRegistry:
         return tool.execute(action.arguments, workspace_root, call_id=action.call_id)
 
     @classmethod
-    def create_default(cls, config: Optional[KaufeeConfig] = None) -> ToolRegistry:
-        """Instantiate default registry with all core filesystem and runner tools."""
+    def create_default(
+        cls,
+        config: Optional[KaufeeConfig] = None,
+        workspace_root: Optional[Path] = None,
+    ) -> ToolRegistry:
+        """Instantiate default registry with all core filesystem, runner, and discovered MCP tools."""
         registry = cls()
         timeout = config.step_timeout if config else 15
         max_bytes = config.max_output_bytes if config else 50000
@@ -89,5 +93,19 @@ class ToolRegistry:
         registry.register(BrowserOpenTool(timeout_seconds=timeout))
         registry.register(BrowserScrapeTool(timeout_seconds=timeout))
         registry.register(BrowserDownloadTool(timeout_seconds=timeout * 2))
-        registry.register(PythonRunnerTool(default_timeout=timeout, max_output_bytes=max_bytes))
+        runner_type = config.runner_type if config else "auto"
+        registry.register(
+            PythonRunnerTool(
+                default_timeout=timeout,
+                max_output_bytes=max_bytes,
+                runner_type=runner_type,
+            )
+        )
+
+        # Discover MCP servers if configured
+        if workspace_root:
+            from kaufee.mcp.manager import MCPManager
+            mcp_mgr = MCPManager(workspace_root=workspace_root)
+            mcp_mgr.discover_and_register_tools(registry)
+
         return registry

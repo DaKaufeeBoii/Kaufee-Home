@@ -40,7 +40,7 @@ class AgentController:
         self.store = StateStore(state_dir)
 
         # Tools & Policy
-        self.tools = tool_registry or ToolRegistry.create_default(self.config)
+        self.tools = tool_registry or ToolRegistry.create_default(self.config, workspace_root=self.workspace_root)
         self.policy = PolicyEngine(self.config)
 
         # LLM Client
@@ -64,6 +64,21 @@ class AgentController:
                 api_key=self.config.remote_api_key,
                 model=self.config.remote_model,
             )
+        elif provider == "hybrid":
+            from kaufee.llm.router import HybridRouterClient
+            primary = OllamaClient(
+                base_url=self.config.ollama_base_url,
+                model=self.config.ollama_model,
+                timeout=self._llm_timeout,
+                keep_alive=self.config.ollama_keep_alive,
+                num_predict=self.config.ollama_num_predict,
+            )
+            fallback = RemoteAPIClient(
+                base_url=self.config.remote_api_base_url,
+                api_key=self.config.remote_api_key,
+                model=self.config.remote_model,
+            )
+            return HybridRouterClient(primary_client=primary, fallback_client=fallback, escalate_on_error=True)
         else:
             client = OllamaClient(
                 base_url=self.config.ollama_base_url,

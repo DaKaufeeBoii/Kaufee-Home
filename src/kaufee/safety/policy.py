@@ -214,6 +214,45 @@ class PolicyEngine:
                 principle=ResponsibleAIPrinciple.TRANSPARENCY.value,
             )
 
+        # 8. Model Context Protocol (MCP) external tools
+        if tool_name.startswith("mcp__") or tool_name.startswith("mcp_"):
+            path_keys = [
+                "path",
+                "file_path",
+                "source_path",
+                "destination_path",
+                "source",
+                "destination",
+                "directory",
+                "dir",
+            ]
+            for key in path_keys:
+                if key in args and isinstance(args[key], (str, Path)):
+                    is_safe, reason, _ = is_path_safe_and_within_workspace(
+                        args[key], workspace_root, must_exist=False
+                    )
+                    if not is_safe:
+                        return PolicyDecision(
+                            allowed=False,
+                            requires_approval=False,
+                            reason=f"MCP tool argument '{key}' violates workspace boundary: {reason}",
+                            risk_level=RiskLevel.CRITICAL,
+                            principle=ResponsibleAIPrinciple.PRIVACY_AND_SECURITY.value,
+                        )
+
+            requires_approval = autonomy != "autonomous"
+            return PolicyDecision(
+                allowed=True,
+                requires_approval=requires_approval,
+                reason=(
+                    f"External MCP tool '{tool_name}' requires approval."
+                    if requires_approval
+                    else f"External MCP tool '{tool_name}' permitted per autonomous configuration."
+                ),
+                risk_level=RiskLevel.HIGH if requires_approval else RiskLevel.MEDIUM,
+                principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+            )
+
         # Unknown tool (Reliability & Safety)
         return PolicyDecision(
             allowed=False,

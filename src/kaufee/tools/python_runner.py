@@ -1,26 +1,19 @@
-"""Python process execution tool with timeouts, limits, and diagnostics."""
+"""Python process execution tool with timeouts, limits, sandboxing, and diagnostics."""
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 import tempfile
 import threading
-import time
 from pathlib import Path
 from typing import Any
 
 from kaufee.safety.permissions import is_path_safe_and_within_workspace
 from kaufee.tools.base import BaseTool
+from kaufee.tools.runner_base import BaseExecutionRunner, DockerRunner, SubprocessRunner
 
 
 class PythonRunnerTool(BaseTool):
-    """Execute workspace Python code with bounded time and captured output.
-
-    This is resource limiting, not a security sandbox: child Python code still
-    runs with the current user's OS permissions.
-    """
+    """Execute workspace Python code with bounded time, captured output, and optional Docker sandboxing."""
 
     name = "python_runner"
     description = (
@@ -33,10 +26,26 @@ class PythonRunnerTool(BaseTool):
         default_timeout: int = 15,
         max_output_bytes: int = 50000,
         cancellation_event: threading.Event | None = None,
+        runner: BaseExecutionRunner | None = None,
+        runner_type: str = "auto",
     ):
         self.default_timeout = max(1, int(default_timeout))
         self.max_output_bytes = max(1, int(max_output_bytes))
         self.cancellation_event = cancellation_event or threading.Event()
+        self.runner_type = runner_type
+        if runner is not None:
+            self._runner = runner
+        elif runner_type == "docker":
+            self._runner = DockerRunner()
+        elif runner_type == "auto":
+            docker = DockerRunner()
+            self._runner = docker if docker.is_available() else SubprocessRunner()
+        else:
+            self._runner = SubprocessRunner()
+
+    @property
+    def runner(self) -> BaseExecutionRunner:
+        return self._runner
 
     @property
     def parameters_schema(self) -> dict[str, Any]:
@@ -93,131 +102,19 @@ class PythonRunnerTool(BaseTool):
             temporary_script.close()
             exec_target = Path(temporary_script.name)
 
-        cmd = [sys.executable, str(exec_target), *[str(arg) for arg in cli_args]]
-        # Avoid leaking API keys and unrelated parent-process state to generated code.
-        env = {
-            "PATH": os.environ.get("PATH", ""),
-            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
-            "WINDIR": os.environ.get("WINDIR", ""),
-            "TEMP": os.environ.get("TEMP", ""),
-            "TMP": os.environ.get("TMP", ""),
-            "LANG": os.environ.get("LANG", "C.UTF-8"),
-            "PYTHONIOENCODING": "utf-8",
-            "PYTHONUNBUFFERED": "1",
-            "PYTHONPATH": str(workspace),
-        }
-        start_time = time.perf_counter()
         try:
-            with tempfile.TemporaryFile(mode="w+b") as stdin_file:
-                if stdin_text is not None:
-                    stdin_file.write(stdin_text.encode("utf-8"))
-                    stdin_file.seek(0)
-                process = subprocess.Popen(
-                    cmd,
-                    cwd=str(workspace),
-                    stdin=stdin_file if stdin_text is not None else subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    env=env,
-                )
-                stdout_capture = bytearray()
-                stderr_capture = bytearray()
-                stdout_size = [0]
-                stderr_size = [0]
-
-                def drain(stream: Any, capture: bytearray, total_size: list[int]) -> None:
-                    while chunk := stream.read(8192):
-                        total_size[0] += len(chunk)
-                        remaining = self.max_output_bytes - len(capture)
-                        if remaining > 0:
-                            capture.extend(chunk[:remaining])
-                    stream.close()
-
-                stdout_thread = threading.Thread(
-                    target=drain,
-                    args=(process.stdout, stdout_capture, stdout_size),
-                    daemon=True,
-                )
-                stderr_thread = threading.Thread(
-                    target=drain,
-                    args=(process.stderr, stderr_capture, stderr_size),
-                    daemon=True,
-                )
-                stdout_thread.start()
-                stderr_thread.start()
-                timed_out = False
-                cancelled = False
-                deadline = start_time + timeout
-                while process.poll() is None:
-                    if self.cancellation_event.is_set():
-                        cancelled = True
-                        process.kill()
-                        process.wait()
-                        break
-                    remaining = deadline - time.perf_counter()
-                    if remaining <= 0:
-                        timed_out = True
-                        process.kill()
-                        process.wait()
-                        break
-                    try:
-                        process.wait(timeout=min(0.1, remaining))
-                    except subprocess.TimeoutExpired:
-                        continue
-                    except KeyboardInterrupt:
-                        cancelled = True
-                        self.cancellation_event.set()
-                        process.kill()
-                        process.wait()
-                        break
-
-                stdout_thread.join(timeout=1)
-                stderr_thread.join(timeout=1)
-                duration_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
-                output_truncated = (
-                    stdout_size[0] > self.max_output_bytes or stderr_size[0] > self.max_output_bytes
-                )
-                stdout = self._decode_capture(stdout_capture, stdout_size[0])
-                stderr = self._decode_capture(stderr_capture, stderr_size[0])
-                metadata = {
-                    "returncode": -1 if timed_out else process.returncode,
-                    "duration_ms": duration_ms,
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "script": exec_target.name,
-                    "output_truncated": output_truncated,
-                }
-                if timed_out:
-                    metadata["timeout"] = timeout
-                    return False, f"Execution timed out after {timeout} seconds.", metadata
-                if cancelled:
-                    metadata["cancelled"] = True
-                    return False, "Execution cancelled by user.", metadata
-                if process.returncode == 0:
-                    return True, stdout or "(Execution completed with exit code 0 and empty output)", metadata
-                report = f"Execution failed (exit code {process.returncode}):"
-                if stderr:
-                    report += f"\nSTDERR:\n{stderr}"
-                if stdout:
-                    report += f"\nSTDOUT:\n{stdout}"
-                return False, report, metadata
-        except Exception as exc:
-            return False, f"Failed to spawn Python process: {exc}", {
-                "returncode": -1,
-                "duration_ms": round((time.perf_counter() - start_time) * 1000.0, 2),
-                "error": str(exc),
-            }
+            return self._runner.execute(
+                exec_target,
+                cli_args,
+                workspace,
+                stdin_text,
+                timeout,
+                self.max_output_bytes,
+                self.cancellation_event,
+            )
         finally:
             if temporary_script is not None:
                 try:
                     Path(temporary_script.name).unlink(missing_ok=True)
                 except OSError:
                     pass
-
-    @staticmethod
-    def _decode_capture(data: bytearray, total_size: int) -> str:
-        """Decode retained stream bytes and mark output that exceeded its cap."""
-        result = bytes(data).decode("utf-8", errors="replace")
-        if total_size > len(data):
-            result += "\n...[stream truncated]..."
-        return result

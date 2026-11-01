@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Add Model Context Protocol (MCP) client and manager (`src/kaufee/mcp/`) enabling stdio JSON-RPC tool connections from `.kaufee/mcp_servers.json`.
+- Implement Pluggable Execution Runners (`src/kaufee/tools/runner_base.py`) supporting `SubprocessRunner` and resource-bounded, network-isolated `DockerRunner` (`--network none`, 512MB RAM, 1.0 CPU limit).
+- Add Two-Tier Hybrid Cascading LLM Router (`src/kaufee/llm/router.py`) providing local-first generation ($0 cost) with automatic escalation to frontier cloud APIs on local failure or repair directives.
+- Update `PolicyEngine` to enforce path safety and autonomy approvals across external MCP tools.
+
 ## 0.3.0
 
 - Add browser automation tools: `browser_open`, `browser_scrape`, and `browser_download` supporting Playwright headless automation and an HTTP fallback.

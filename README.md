@@ -327,16 +327,26 @@ kaufee audit
 kaufee audit task-a1b2c3d4e5
 ```
 
-### 5. In-Terminal TUI Dashboard (`kaufee dashboard` or `kaufee tui`)
+### 5. Interactive Dashboards: In-Terminal TUI & Web Browser UI
 
-Launch an interactive Textual terminal dashboard for real-time audit exploration, task status, and event timeline:
+Kaufee-Home provides dual interactive interfaces:
+
+#### Option A: In-Terminal Textual TUI (`kaufee dashboard` or `kaufee tui`)
 ```bash
 kaufee dashboard
 # or
 kaufee tui
 ```
-
 Press `q` to quit, `r` to refresh, and select any task row to display its complete event log and Responsible AI metadata in the detail viewer.
+
+#### Option B: Standalone Web Browser Dashboard (`kaufee web` or `kaufee ui`)
+Launch a zero-dependency local web dashboard on `http://127.0.0.1:8765`:
+```bash
+kaufee web
+# or
+kaufee ui
+```
+Features real-time task audit tables, Responsible AI principle inspection, live timeline traces, and workspace metrics in your browser.
 
 ### 6. Pre-Flight Plan Approvals (`--approval-mode`)
 

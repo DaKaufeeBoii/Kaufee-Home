@@ -12,6 +12,7 @@
   - `write_clipboard`: Safely copies text content to the system clipboard.
 - Extend Browser Automation (`src/kaufee/tools/browser.py`):
   - Added `browser_click` and `browser_fill` for interactive UI element clicks and form filling.
+- Add Standalone Local Web Browser Dashboard (`kaufee web` and `kaufee ui`) powered by zero-dependency HTTP server and REST APIs.
 - Add `psutil` and `pyperclip` dependencies to `pyproject.toml`.
 
 ## 0.4.0

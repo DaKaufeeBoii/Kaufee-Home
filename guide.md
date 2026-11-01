@@ -263,6 +263,7 @@ Kaufee uses Ollama by default. If your device is slow or does not have enough me
    kaufee benchmark
    kaufee interactive
    kaufee dashboard      # Open interactive terminal dashboard (TUI)
+   kaufee web            # Open browser-based dashboard on http://127.0.0.1:8765
    kaufee principles     # View Responsible AI principles matrix
    ```
 

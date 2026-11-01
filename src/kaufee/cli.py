@@ -334,6 +334,38 @@ def tui_command(
     dashboard_command(workspace=workspace)
 
 
+@app.command("web")
+def web_command(
+    workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
+    port: int = typer.Option(8765, "--port", "-p", help="Port for local web dashboard server (default 8765)."),
+    no_open: bool = typer.Option(False, "--no-open", help="Do not open browser automatically."),
+) -> None:
+    """Launch the browser-based web dashboard on http://127.0.0.1:8765."""
+    import time
+    from kaufee.ui.web import LocalDashboardServer
+    cfg = KaufeeConfig.load(workspace=workspace)
+    server = LocalDashboardServer(cfg, port=port)
+    console.print(f"[bold green]Starting Kaufee-Home Web Dashboard on http://127.0.0.1:{port}[/bold green]")
+    console.print("[dim]Press Ctrl+C to stop the dashboard server.[/dim]")
+    server.start(open_browser=not no_open)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Stopping web dashboard server...[/yellow]")
+        server.stop()
+
+
+@app.command("ui")
+def ui_command(
+    workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
+    port: int = typer.Option(8765, "--port", "-p", help="Port for local web dashboard server (default 8765)."),
+    no_open: bool = typer.Option(False, "--no-open", help="Do not open browser automatically."),
+) -> None:
+    """Launch the browser-based web dashboard (alias for web)."""
+    web_command(workspace=workspace, port=port, no_open=no_open)
+
+
 @app.command("config")
 def config_command(
     workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),

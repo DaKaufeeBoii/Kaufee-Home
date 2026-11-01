@@ -681,6 +681,130 @@ def build_benchmark_tasks() -> list[BenchmarkTask]:
         )
     )
 
+    # Category 9: Desktop Automation
+    tasks.append(
+        BenchmarkTask(
+            id="PC-01",
+            category="Desktop automation",
+            name="Send desktop completion notification",
+            goal="Notify user of milestone completion",
+            verify_fn=lambda ws, st: (
+                st.status == TaskStatus.COMPLETED and any(h.get("action", {}).get("tool_name") == "send_desktop_notification" for h in st.history),
+                "Desktop notification triggered successfully",
+            ),
+            custom_llm_handler=lambda p: json.dumps({
+                "plan": [
+                    {
+                        "step_number": 1,
+                        "description": "Send notification",
+                        "tool_name": "send_desktop_notification",
+                        "arguments": {"title": "Task Done", "message": "Verification passed"},
+                        "expected_outcome": "Notification delivered",
+                    }
+                ]
+            }),
+        )
+    )
+
+    tasks.append(
+        BenchmarkTask(
+            id="PC-02",
+            category="Desktop automation",
+            name="Query active system processes",
+            goal="Inspect system resource utilization",
+            verify_fn=lambda ws, st: (
+                st.status == TaskStatus.COMPLETED and any(h.get("action", {}).get("tool_name") == "list_system_processes" for h in st.history),
+                "System processes listed successfully",
+            ),
+            custom_llm_handler=lambda p: json.dumps({
+                "plan": [
+                    {
+                        "step_number": 1,
+                        "description": "List top processes",
+                        "tool_name": "list_system_processes",
+                        "arguments": {"limit": 5},
+                        "expected_outcome": "Process list retrieved",
+                    }
+                ]
+            }),
+        )
+    )
+
+    tasks.append(
+        BenchmarkTask(
+            id="PC-03",
+            category="Desktop automation",
+            name="Write verification token to clipboard",
+            goal="Copy session token to clipboard",
+            verify_fn=lambda ws, st: (
+                st.status == TaskStatus.COMPLETED and any(h.get("action", {}).get("tool_name") == "write_clipboard" for h in st.history),
+                "Clipboard token written successfully",
+            ),
+            custom_llm_handler=lambda p: json.dumps({
+                "plan": [
+                    {
+                        "step_number": 1,
+                        "description": "Copy token to clipboard",
+                        "tool_name": "write_clipboard",
+                        "arguments": {"content": "KAUFEE_SESSION_VERIFIED"},
+                        "expected_outcome": "Token copied",
+                    }
+                ]
+            }),
+        )
+    )
+
+    tasks.append(
+        BenchmarkTask(
+            id="PC-04",
+            category="Desktop automation",
+            name="Block dangerous utility execution via launch_application",
+            goal="Attempt to launch dangerous shell utility",
+            expected_status=TaskStatus.FAILED,
+            expect_blocked_safety=True,
+            verify_fn=lambda ws, st: (
+                st.status == TaskStatus.FAILED and any("blocked by security policy" in str(h) for h in st.history),
+                "Dangerous utility launch blocked by security policy",
+            ),
+            custom_llm_handler=lambda p: json.dumps({
+                "plan": [
+                    {
+                        "step_number": 1,
+                        "description": "Attempt to launch cmd.exe",
+                        "tool_name": "launch_application",
+                        "arguments": {"app_name": "cmd.exe"},
+                        "expected_outcome": "Blocked",
+                    }
+                ]
+            }),
+        )
+    )
+
+    # Category 10: Security Grants
+    tasks.append(
+        BenchmarkTask(
+            id="SGP-01",
+            category="Security & Grants",
+            name="Execute workspace update under active grant",
+            goal="Write configuration file under session authorization",
+            verify_fn=lambda ws, st: (
+                (ws / "config.json").exists() and "ready" in (ws / "config.json").read_text(encoding="utf-8"),
+                "File written under authorized session grant",
+            ),
+            custom_llm_handler=lambda p: json.dumps({
+                "plan": [
+                    {
+                        "step_number": 1,
+                        "description": "Write config file",
+                        "tool_name": "write_file",
+                        "arguments": {"path": "config.json", "content": "{\"status\": \"ready\"}\n"},
+                        "expected_outcome": "config.json written",
+                    }
+                ]
+            }),
+        )
+    )
+
     return tasks
 
 
@@ -688,10 +812,10 @@ def run_full_benchmark(
     workspace_override: Optional[Path] = None,
     verbose: bool = False,
 ) -> BenchmarkSuiteReport:
-    """Run all 20 benchmark tasks and generate report."""
+    """Run all 25 benchmark tasks and generate report."""
     console = Console(safe_box=True)
     console.print("\n[bold cyan]=================================================================[/bold cyan]")
-    console.print(f"[bold green]       Kaufee-Home v{__version__} -- 20-Task Evaluation Benchmark Suite       [/bold green]")
+    console.print(f"[bold green]       Kaufee-Home v{__version__} -- 25-Task Evaluation Benchmark Suite       [/bold green]")
     console.print("[bold cyan]=================================================================[/bold cyan]\n")
 
     import tempfile
@@ -771,7 +895,7 @@ def run_full_benchmark(
         )
 
         mark = "[bold green]PASS[/bold green]" if passed else "[bold red]FAIL[/bold red]"
-        console.print(f"[{idx:02d}/20] {mark} [{t.id}] {t.category} -> {t.name} ({duration_ms:.1f}ms)")
+        console.print(f"[{idx:02d}/{len(tasks):02d}] {mark} [{t.id}] {t.category} -> {t.name} ({duration_ms:.1f}ms)")
         if not passed and error_msg:
             console.print(f"       [red]Reason: {error_msg}[/red]")
 

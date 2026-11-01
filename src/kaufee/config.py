@@ -105,6 +105,10 @@ class KaufeeConfig(BaseModel):
         default="assisted",
         description="Autonomy mode: 'manual' (approve all mutating), 'assisted' (approve high-risk), or 'autonomous'.",
     )
+    approval_mode: str = Field(
+        default="plan",
+        description="Approval scope: 'plan' (approve full plan upfront) or 'step' (prompt on each sensitive action).",
+    )
     require_approval_for_delete: bool = Field(
         default=True,
         description="Require explicit user approval before deleting workspace files.",
@@ -154,6 +158,7 @@ class KaufeeConfig(BaseModel):
         provider: Optional[str] = None,
         model: Optional[str] = None,
         autonomy_mode: Optional[str] = None,
+        approval_mode: Optional[str] = None,
     ) -> KaufeeConfig:
         """Load configuration from environment, .env file, and explicit overrides."""
         # Check standard .env locations
@@ -172,6 +177,10 @@ class KaufeeConfig(BaseModel):
         chosen_mode = (
             autonomy_mode
             or get_val("KAUFEE_AUTONOMY_MODE", "assisted")
+        ).lower()
+        chosen_approval_mode = (
+            approval_mode
+            or get_val("KAUFEE_APPROVAL_MODE", "plan")
         ).lower()
 
         ollama_url = get_val("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -209,6 +218,7 @@ class KaufeeConfig(BaseModel):
             workspace_root=ws_path,
             llm_provider=chosen_provider,
             autonomy_mode=chosen_mode,
+            approval_mode=chosen_approval_mode,
             ollama_base_url=ollama_url,
             ollama_model=ollama_mdl,
             ollama_keep_alive=ollama_keep_alive,

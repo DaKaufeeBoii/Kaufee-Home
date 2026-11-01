@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Add browser automation tools: `browser_open`, `browser_scrape`, and `browser_download` supporting Playwright headless automation and an HTTP fallback.
+- Introduce pre-flight plan approvals (`--approval-mode plan` by default) to eliminate alert fatigue by presenting the full task plan upfront for one-click authorization.
+- Add in-terminal interactive TUI dashboard (`kaufee dashboard` and `kaufee tui`) built with Textual for live audit log inspection, event streams, and Responsible AI principle telemetry.
+- Add `textual` and `playwright` dependencies to `pyproject.toml`.
+
 ## 0.2.5
 
 - Implement end-to-end Responsible AI architecture mapping to the 6 core principles: Fairness, Reliability & Safety, Privacy & Security, Inclusiveness, Transparency, and Accountability.

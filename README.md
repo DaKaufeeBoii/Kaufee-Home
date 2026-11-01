@@ -63,6 +63,8 @@ graph TD
 | **Python Runner** (`src/kaufee/tools/python_runner.py`) | Subprocess execution with strict timeouts, output limits, and unbuffered stdout/stderr capture. |
 | **Verifier** (`src/kaufee/agent/verifier.py`) | Independent AST parsing, exit code inspection, file existence checks, and domain assertion tests. |
 | **Audit Logger & Store** (`src/kaufee/state/`) | Complete persistence of tasks, structured event streams, privacy redaction, and metrics tracking. |
+| **Browser Automation Tools** (`src/kaufee/tools/browser.py`) | Web page navigation, content scraping with secret redaction, and downloads via Playwright / HTTP. |
+| **In-Terminal TUI Dashboard** (`src/kaufee/ui/dashboard.py`) | Interactive Textual terminal dashboard for exploring tasks, audit logs, and Responsible AI telemetry. |
 
 ---
 
@@ -261,7 +263,7 @@ kaufee run "Create a Python program that draws a triangle, run it, and fix any e
 Example terminal session:
 ```
 ======================================================================
-Kaufee-Home v0.2.4
+Kaufee-Home v0.3.0
 Goal: Create a Python program that draws a triangle, run it, and fix any errors.
 Workspace: D:\Kaufee\padhai\7th-sem\Agentic-AI\Agentic-AI-Kaufee\workspace
 LLM Provider: ollama (qwen2.5-coder:7b)
@@ -319,7 +321,37 @@ kaufee audit
 kaufee audit task-a1b2c3d4e5
 ```
 
-### 5. Revert Changes (`kaufee undo`)
+### 5. In-Terminal TUI Dashboard (`kaufee dashboard` or `kaufee tui`)
+
+Launch an interactive Textual terminal dashboard for real-time audit exploration, task status, and event timeline:
+```bash
+kaufee dashboard
+# or
+kaufee tui
+```
+
+Press `q` to quit, `r` to refresh, and select any task row to display its complete event log and Responsible AI metadata in the detail viewer.
+
+### 6. Pre-Flight Plan Approvals (`--approval-mode`)
+
+By default, Kaufee uses pre-flight plan approvals (`--approval-mode plan`) to eliminate alert fatigue. The agent presents its entire synthesized plan upfront for confirmation. Once authorized, execution proceeds seamlessly while still halting for unexpected high-risk actions. To require step-by-step confirmation for every action instead:
+```bash
+kaufee run "Build a data parser" --approval-mode step
+```
+
+### 7. Browser Automation Tools
+
+Kaufee includes built-in browser tools for web-assisted research, automated documentation scraping, and dataset downloads:
+- `browser_open`: Navigates to a URL and captures title, HTTP status, and rendered HTML/text using Playwright headless Chromium (with HTTP fallback).
+- `browser_scrape`: Fetches a page and extracts sanitized text, stripping tags and redacting sensitive credentials.
+- `browser_download`: Downloads web assets or datasets directly into the workspace with strict safety path bounds.
+
+Example:
+```bash
+kaufee run "Scrape the release notes from https://example.com/notes and save a summary to notes.txt"
+```
+
+### 8. Revert Changes (`kaufee undo`)
 
 ```bash
 kaufee undo triangle.py

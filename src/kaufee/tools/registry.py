@@ -8,6 +8,7 @@ from typing import Any, Optional
 from kaufee.config import KaufeeConfig
 from kaufee.state.models import ToolCall, ToolResult
 from kaufee.tools.base import BaseTool
+from kaufee.tools.browser import BrowserDownloadTool, BrowserOpenTool, BrowserScrapeTool
 from kaufee.tools.filesystem import (
     CreateDirectoryTool,
     DeleteFileTool,
@@ -85,5 +86,8 @@ class ToolRegistry:
         registry.register(MoveFileTool())
         registry.register(DeleteFileTool())
         registry.register(UndoFileTool())
+        registry.register(BrowserOpenTool(timeout_seconds=timeout))
+        registry.register(BrowserScrapeTool(timeout_seconds=timeout))
+        registry.register(BrowserDownloadTool(timeout_seconds=timeout * 2))
         registry.register(PythonRunnerTool(default_timeout=timeout, max_output_bytes=max_bytes))
         return registry

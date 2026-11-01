@@ -1,6 +1,6 @@
 """Kaufee-Home: Lightweight, local-first, AI-powered CLI agent for verifiable coding and workspace tasks."""
 
-__version__ = "0.2.5"
+__version__ = "0.3.0"
 __author__ = "Kaufee"
 
 __all__ = ["__version__"]

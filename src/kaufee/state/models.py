@@ -138,6 +138,7 @@ class TaskState(BaseModel):
     error_message: Optional[str] = None
     verification_result: Optional[VerificationResult] = None
     is_cancelled_flag: bool = False
+    plan_approved: bool = False
 
     def is_cancelled(self) -> bool:
         return self.is_cancelled_flag

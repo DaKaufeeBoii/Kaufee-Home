@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kaufee-home"
-version = "0.2.5"
+version = "0.3.0"
 description = "Lightweight, local-first, AI-powered CLI agent for verifiable coding and workspace tasks"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,8 @@ dependencies = [
     "rich>=13.0.0",
     "pydantic>=2.0.0",
     "httpx>=0.25.0",
+    "textual>=0.50.0",
+    "playwright>=1.40.0",
 ]
 
 [project.optional-dependencies]

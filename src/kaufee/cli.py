@@ -17,7 +17,7 @@ from kaufee.config import KaufeeConfig
 from kaufee.safety.principles import ResponsibleAIPrinciple, get_principle_info
 from kaufee.safety.redactor import redact_sensitive_text
 from kaufee.state.audit import AuditLogger
-from kaufee.state.models import PolicyDecision, TaskState, TaskStatus, ToolCall, ToolResult
+from kaufee.state.models import Plan, PolicyDecision, TaskState, TaskStatus, ToolCall, ToolResult
 from kaufee.tools.workspace import WorkspaceManager
 
 
@@ -48,6 +48,30 @@ def create_approval_handler(auto_approve: bool = False):
             )
         )
         return Confirm.ask("Do you authorize this action?", default=False)
+
+    return callback
+
+
+def create_plan_approval_handler(auto_approve: bool = False):
+    """Factory for interactive pre-flight plan approval callback."""
+    def callback(plan: Plan) -> bool:
+        if auto_approve:
+            return True
+
+        steps_summary = "\n".join(
+            f"  {s.step_number}. [bold green]{s.tool_name}[/bold green]: {s.description}" for s in plan.steps
+        )
+        console.print(
+            Panel(
+                f"[bold cyan]Pre-Flight Plan Approval Gate (Accountability Principle)[/bold cyan]\n\n"
+                f"[bold]Proposed Execution Steps ({len(plan.steps)} total):[/bold]\n"
+                f"{steps_summary}\n\n"
+                f"[dim]Authorizing this plan allows planned actions to run without repetitive prompts, eliminating alert fatigue.[/dim]",
+                title="[bold yellow]Pre-Flight Plan Authorization[/bold yellow]",
+                border_style="yellow",
+            )
+        )
+        return Confirm.ask("Do you authorize this entire plan to proceed autonomously?", default=True)
 
     return callback
 
@@ -103,17 +127,24 @@ def run(
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="LLM provider ('ollama', 'remote', 'mock')."),
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model name."),
     mode: Optional[str] = typer.Option(None, "--mode", help="Autonomy mode: 'manual', 'assisted', or 'autonomous'."),
+    approval_mode: Optional[str] = typer.Option(None, "--approval-mode", help="Approval scope: 'plan' (approve full plan upfront) or 'step'."),
     timeout: int = typer.Option(300, "--timeout", "-t", help="LLM request timeout in seconds (default 300)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Automatically approve risky actions."),
 ) -> None:
     """Execute a task goal in the workspace."""
-    cfg = KaufeeConfig.load(workspace=workspace, provider=provider, model=model, autonomy_mode=mode)
+    cfg = KaufeeConfig.load(
+        workspace=workspace,
+        provider=provider,
+        model=model,
+        autonomy_mode=mode,
+        approval_mode=approval_mode,
+    )
 
     console.print(
         Panel(
             f"[bold]Goal:[/bold] {goal}\n"
             f"[bold]Workspace:[/bold] {cfg.workspace_root}\n"
-            f"[bold]Autonomy Mode:[/bold] {cfg.autonomy_mode.upper()}\n"
+            f"[bold]Autonomy Mode:[/bold] {cfg.autonomy_mode.upper()} | [bold]Approval Gate:[/bold] {cfg.approval_mode.upper()}\n"
             f"[bold]LLM Provider:[/bold] {cfg.llm_provider} ({cfg.ollama_model if cfg.llm_provider == 'ollama' else cfg.remote_model})",
             title=f"[bold green]Kaufee-Home v{__version__}[/bold green]",
             border_style="green",
@@ -122,11 +153,13 @@ def run(
 
     controller = AgentController(config=cfg, llm_timeout=timeout)
     approval_cb = create_approval_handler(auto_approve=yes)
+    plan_approval_cb = create_plan_approval_handler(auto_approve=yes)
     step_cb = create_step_reporter()
 
     final_state = controller.run_task(
         goal=goal,
         approval_callback=approval_cb,
+        plan_approval_callback=plan_approval_cb,
         step_callback=step_cb,
     )
 
@@ -202,6 +235,7 @@ def interactive(
     )
 
     approval_cb = create_approval_handler(auto_approve=yes)
+    plan_approval_cb = create_plan_approval_handler(auto_approve=yes)
     step_cb = create_step_reporter()
 
     while True:
@@ -215,7 +249,11 @@ def interactive(
                 console.print("[dim]Goodbye![/dim]")
                 break
             elif cmd_lower == "help":
-                console.print("Commands:\n  principles - Show Responsible AI mapping\n  config - Show active settings\n  undo <file> - Restore file backup\n  exit - Exit shell")
+                console.print("Commands:\n  dashboard  - Open in-terminal TUI dashboard\n  principles - Show Responsible AI mapping\n  config     - Show active settings\n  undo <file>- Restore file backup\n  exit       - Exit shell")
+                continue
+            elif cmd_lower in ("dashboard", "tui"):
+                from kaufee.ui.dashboard import run_dashboard
+                run_dashboard(cfg)
                 continue
             elif cmd_lower in ("principles", "rai", "/principles"):
                 show_principles()
@@ -237,6 +275,7 @@ def interactive(
             controller.run_task(
                 goal=user_input,
                 approval_callback=approval_cb,
+                plan_approval_callback=plan_approval_cb,
                 step_callback=step_cb,
             )
         except (KeyboardInterrupt, EOFError):
@@ -267,6 +306,24 @@ def show_principles() -> None:
     console.print(table)
 
 
+@app.command("dashboard")
+def dashboard_command(
+    workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
+) -> None:
+    """Launch the interactive in-terminal Textual TUI dashboard."""
+    from kaufee.ui.dashboard import run_dashboard
+    cfg = KaufeeConfig.load(workspace=workspace)
+    run_dashboard(cfg)
+
+
+@app.command("tui")
+def tui_command(
+    workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
+) -> None:
+    """Launch the interactive in-terminal Textual TUI dashboard (alias for dashboard)."""
+    dashboard_command(workspace=workspace)
+
+
 @app.command("config")
 def config_command(
     workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
@@ -283,6 +340,7 @@ def show_config(cfg: KaufeeConfig) -> None:
 
     table.add_row("Workspace Root", str(cfg.workspace_root))
     table.add_row("Autonomy Mode", cfg.autonomy_mode)
+    table.add_row("Approval Gate Scope", cfg.approval_mode)
     table.add_row("LLM Provider", cfg.llm_provider)
     table.add_row("Ollama Base URL", cfg.ollama_base_url)
     table.add_row("Ollama Model", cfg.ollama_model)

@@ -262,6 +262,14 @@ Kaufee uses Ollama by default. If your device is slow or does not have enough me
    kaufee audit
    kaufee benchmark
    kaufee interactive
+   kaufee dashboard      # Open interactive terminal dashboard (TUI)
+   kaufee principles     # View Responsible AI principles matrix
+   ```
+
+   To switch from pre-flight plan approvals to step-by-step confirmation prompts, pass `--approval-mode step`:
+
+   ```text
+   kaufee run "Your task" --approval-mode step
    ```
 
 4. If you started `kaufee interactive`, type `exit` to close it. Type `help` inside it to see its special commands.

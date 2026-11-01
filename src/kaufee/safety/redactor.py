@@ -31,11 +31,11 @@ SENSITIVE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         "[REDACTED_JWT]",
         re.compile(r"\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b"),
     ),
-    # Key-value secret assignments: password=..., api_key=..., secret=...
+    # Key-value secret assignments: password=..., api_key=..., secret is...
     (
         r"\g<1>[REDACTED_SECRET]\g<3>",
         re.compile(
-            r"""(?i)([\"']?(?:password|passwd|secret|api[_-]?key|token|auth[_-]?token)[\"']?\s*[:=]\s*[\"']?)([^\"'\s,;]{4,})([\"']?)"""
+            r"""(?i)([\"']?(?:password|passwd|secret|api[_-]?key|token|auth[_-]?token)[\"']?(?:\s*[:=]\s*|\s+is\s+)[\"']?)([^\"'\s,;]{4,})([\"']?)"""
         ),
     ),
     # Credit card numbers (Luhn candidate regex)

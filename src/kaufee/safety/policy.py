@@ -184,6 +184,36 @@ class PolicyEngine:
                 principle=ResponsibleAIPrinciple.TRANSPARENCY.value,
             )
 
+        # 7. Browser automation tools
+        if tool_name in ("browser_open", "browser_scrape", "browser_download"):
+            if tool_name == "browser_download":
+                dest = args.get("destination_path") or args.get("path")
+                if dest:
+                    is_safe, reason, _ = is_path_safe_and_within_workspace(dest, workspace_root, must_exist=False)
+                    if not is_safe:
+                        return PolicyDecision(
+                            allowed=False,
+                            requires_approval=False,
+                            reason=reason,
+                            risk_level=RiskLevel.CRITICAL,
+                            principle=ResponsibleAIPrinciple.PRIVACY_AND_SECURITY.value,
+                        )
+                if autonomy == "manual":
+                    return PolicyDecision(
+                        allowed=True,
+                        requires_approval=True,
+                        reason="Downloading file requires approval in manual autonomy mode.",
+                        risk_level=RiskLevel.MEDIUM,
+                        principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+                    )
+            return PolicyDecision(
+                allowed=True,
+                requires_approval=False,
+                reason=f"Browser operation '{tool_name}' permitted.",
+                risk_level=RiskLevel.SAFE,
+                principle=ResponsibleAIPrinciple.TRANSPARENCY.value,
+            )
+
         # Unknown tool (Reliability & Safety)
         return PolicyDecision(
             allowed=False,

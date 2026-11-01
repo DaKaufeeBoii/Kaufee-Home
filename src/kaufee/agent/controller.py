@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import threading
 from typing import Callable, Optional
-from kaufee.agent.loop import AgentLoop, ApprovalCallback, StepCallback
+from kaufee.agent.loop import AgentLoop, ApprovalCallback, PlanApprovalCallback, StepCallback
 from kaufee.agent.planner import Planner
 from kaufee.agent.verifier import Verifier
 from kaufee.config import KaufeeConfig
@@ -79,6 +79,7 @@ class AgentController:
         self,
         goal: str,
         approval_callback: Optional[ApprovalCallback] = None,
+        plan_approval_callback: Optional[PlanApprovalCallback] = None,
         step_callback: Optional[StepCallback] = None,
     ) -> TaskState:
         """Create and execute a task for the given goal."""
@@ -105,6 +106,7 @@ class AgentController:
             audit_logger=audit_logger,
             workspace_root=self.workspace_root,
             approval_callback=approval_callback,
+            plan_approval_callback=plan_approval_callback,
             step_callback=step_callback,
         )
         self._current_loop = loop

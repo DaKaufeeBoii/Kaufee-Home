@@ -14,6 +14,7 @@ from kaufee.safety.policy import PolicyEngine
 from kaufee.safety.redactor import redact_data
 from kaufee.state.audit import AuditLogger
 from kaufee.state.models import (
+    Plan,
     PlanStep,
     PolicyDecision,
     StepStatus,
@@ -26,6 +27,7 @@ from kaufee.tools.registry import ToolRegistry
 
 
 ApprovalCallback = Callable[[ToolCall, PolicyDecision], bool]
+PlanApprovalCallback = Callable[[Plan], bool]
 StepCallback = Callable[[str, TaskState, Optional[ToolCall], Optional[ToolResult]], None]
 
 
@@ -41,6 +43,7 @@ class AgentLoop:
         audit_logger: AuditLogger,
         workspace_root: Path,
         approval_callback: Optional[ApprovalCallback] = None,
+        plan_approval_callback: Optional[PlanApprovalCallback] = None,
         step_callback: Optional[StepCallback] = None,
     ):
         self.planner = planner
@@ -50,6 +53,7 @@ class AgentLoop:
         self.audit = audit_logger
         self.workspace_root = workspace_root.resolve()
         self.approval_callback = approval_callback
+        self.plan_approval_callback = plan_approval_callback
         self.step_callback = step_callback
         self.cancellation_event = threading.Event()
         self.cancellation_event.clear()
@@ -97,6 +101,26 @@ class AgentLoop:
                 principle=ResponsibleAIPrinciple.TRANSPARENCY.value,
             )
             self._notify("PLAN_CREATED", state)
+
+            # Pre-flight plan approval (Accountability Principle)
+            cfg = getattr(self.policy, "config", None)
+            approval_mode = getattr(cfg, "approval_mode", "plan") if cfg else "plan"
+            autonomy = getattr(cfg, "autonomy_mode", "assisted") if cfg else "assisted"
+            if approval_mode == "plan" and autonomy != "autonomous" and self.plan_approval_callback:
+                plan_ok = self.plan_approval_callback(plan)
+                state.plan_approved = plan_ok
+                if not plan_ok:
+                    self.audit.log(
+                        "PLAN_APPROVAL_DENIED",
+                        {"plan": plan.model_dump()},
+                        principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+                    )
+                    return state.fail("Execution plan rejected during pre-flight approval.")
+                self.audit.log(
+                    "PLAN_APPROVED",
+                    {"plan": plan.model_dump()},
+                    principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+                )
         except Exception as exc:
             err_msg = f"Planning failed: {exc}"
             self.audit.log(
@@ -239,14 +263,25 @@ class AgentLoop:
 
             # Check approval requirements (Accountability)
             if decision.requires_approval:
-                self.audit.log(
-                    "APPROVAL_PROMPT",
-                    {"action": action.model_dump()},
-                    principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
-                )
-                approved = False
-                if self.approval_callback:
-                    approved = self.approval_callback(action, decision)
+                # Pre-flight plan approval bypass: if user approved the entire plan upfront,
+                # do not prompt on each individual step unless risk is CRITICAL
+                bypass_step_prompt = state.plan_approved and decision.risk_level != RiskLevel.CRITICAL
+                if bypass_step_prompt:
+                    self.audit.log(
+                        "APPROVAL_BYPASS_PLAN_APPROVED",
+                        {"action": action.model_dump()},
+                        principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+                    )
+                    approved = True
+                else:
+                    self.audit.log(
+                        "APPROVAL_PROMPT",
+                        {"action": action.model_dump()},
+                        principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+                    )
+                    approved = False
+                    if self.approval_callback:
+                        approved = self.approval_callback(action, decision)
 
                 if not approved:
                     blocked_actions_signatures.add(action_sig)

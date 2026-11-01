@@ -8,7 +8,14 @@ from typing import Any, Optional
 from kaufee.config import KaufeeConfig
 from kaufee.state.models import ToolCall, ToolResult
 from kaufee.tools.base import BaseTool
-from kaufee.tools.browser import BrowserDownloadTool, BrowserOpenTool, BrowserScrapeTool
+from kaufee.tools.browser import (
+    BrowserClickTool,
+    BrowserDownloadTool,
+    BrowserFillTool,
+    BrowserOpenTool,
+    BrowserScrapeTool,
+)
+from kaufee.tools.clipboard import ReadClipboardTool, WriteClipboardTool
 from kaufee.tools.filesystem import (
     CreateDirectoryTool,
     DeleteFileTool,
@@ -20,6 +27,7 @@ from kaufee.tools.filesystem import (
     WriteFileTool,
 )
 from kaufee.tools.python_runner import PythonRunnerTool
+from kaufee.tools.system import DesktopNotificationTool, LaunchApplicationTool, ListProcessesTool
 
 
 class ToolRegistry:
@@ -93,6 +101,13 @@ class ToolRegistry:
         registry.register(BrowserOpenTool(timeout_seconds=timeout))
         registry.register(BrowserScrapeTool(timeout_seconds=timeout))
         registry.register(BrowserDownloadTool(timeout_seconds=timeout * 2))
+        registry.register(BrowserClickTool(timeout_seconds=timeout))
+        registry.register(BrowserFillTool(timeout_seconds=timeout))
+        registry.register(LaunchApplicationTool())
+        registry.register(ListProcessesTool())
+        registry.register(DesktopNotificationTool())
+        registry.register(ReadClipboardTool())
+        registry.register(WriteClipboardTool())
         runner_type = config.runner_type if config else "auto"
         registry.register(
             PythonRunnerTool(

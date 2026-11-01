@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0
+
+- Add Session-Level Scoped Grants (`src/kaufee/safety/grants.py`) with `--grant-workspace <duration>` support (e.g. `15m`, `1h`) to bypass repetitive confirmation prompts while preserving safety gates for destructive operations.
+- Add Desktop System Automation Tools (`src/kaufee/tools/system.py`):
+  - `launch_application`: Launches verified desktop programs (Notepad, Calculator, VS Code, Explorer) with strict system binary allowlisting and safety checks.
+  - `list_system_processes`: Queries running processes, PIDs, memory usage, and CPU percentages via `psutil`.
+  - `send_desktop_notification`: Sends non-intrusive desktop toast notifications across Windows, macOS, and Linux.
+- Add Clipboard Automation Tools (`src/kaufee/tools/clipboard.py`):
+  - `read_clipboard`: Reads system clipboard text with automated credential and sensitive data redaction.
+  - `write_clipboard`: Safely copies text content to the system clipboard.
+- Extend Browser Automation (`src/kaufee/tools/browser.py`):
+  - Added `browser_click` and `browser_fill` for interactive UI element clicks and form filling.
+- Add `psutil` and `pyperclip` dependencies to `pyproject.toml`.
+
 ## 0.4.0
 
 - Add Model Context Protocol (MCP) client and manager (`src/kaufee/mcp/`) enabling stdio JSON-RPC tool connections from `.kaufee/mcp_servers.json`.

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from kaufee.config import KaufeeConfig
+from kaufee.safety.grants import ScopedGrantManager
 from kaufee.safety.permissions import is_path_safe_and_within_workspace
 from kaufee.safety.principles import ResponsibleAIPrinciple
 from kaufee.state.models import PolicyDecision, RiskLevel, ToolCall
@@ -13,8 +14,9 @@ from kaufee.state.models import PolicyDecision, RiskLevel, ToolCall
 class PolicyEngine:
     """Enforces safety rules, workspace boundaries, autonomy modes, and Responsible AI principles."""
 
-    def __init__(self, config: KaufeeConfig):
+    def __init__(self, config: KaufeeConfig, grants: ScopedGrantManager | None = None):
         self.config = config
+        self.grants = grants or ScopedGrantManager()
 
     def validate(self, action: ToolCall, workspace_root: Path) -> PolicyDecision:
         """Validate proposed action against security policy, workspace boundary, and autonomy level."""
@@ -166,8 +168,16 @@ class PolicyEngine:
                     principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
                 )
 
-            # Manual autonomy mode requires approval for any mutating action
+            # Manual autonomy mode requires approval for mutating actions unless active workspace grant exists
             if autonomy == "manual" and tool_name in ("write_file", "edit_file", "move_file", "create_directory"):
+                if self.grants.has_active_grant("workspace"):
+                    return PolicyDecision(
+                        allowed=True,
+                        requires_approval=False,
+                        reason=f"Action '{tool_name}' permitted under active workspace grant.",
+                        risk_level=RiskLevel.SAFE,
+                        principle=ResponsibleAIPrinciple.TRANSPARENCY.value,
+                    )
                 return PolicyDecision(
                     allowed=True,
                     requires_approval=True,
@@ -185,7 +195,7 @@ class PolicyEngine:
             )
 
         # 7. Browser automation tools
-        if tool_name in ("browser_open", "browser_scrape", "browser_download"):
+        if tool_name in ("browser_open", "browser_scrape", "browser_download", "browser_click", "browser_fill"):
             if tool_name == "browser_download":
                 dest = args.get("destination_path") or args.get("path")
                 if dest:
@@ -198,7 +208,7 @@ class PolicyEngine:
                             risk_level=RiskLevel.CRITICAL,
                             principle=ResponsibleAIPrinciple.PRIVACY_AND_SECURITY.value,
                         )
-                if autonomy == "manual":
+                if autonomy == "manual" and not self.grants.has_active_grant("workspace"):
                     return PolicyDecision(
                         allowed=True,
                         requires_approval=True,
@@ -251,6 +261,69 @@ class PolicyEngine:
                 ),
                 risk_level=RiskLevel.HIGH if requires_approval else RiskLevel.MEDIUM,
                 principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+            )
+
+        # 9. OS Application Launching
+        if tool_name in ("launch_application", "launch_app"):
+            app_name = str(args.get("app_name", "")).strip().lower()
+            dangerous = {
+                "cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh", "pwsh.exe",
+                "bash", "sh", "shutdown", "format", "diskpart", "taskkill"
+            }
+            if Path(app_name).name.lower() in dangerous:
+                return PolicyDecision(
+                    allowed=False,
+                    requires_approval=False,
+                    reason=f"Launching system utility '{app_name}' is blocked by security policy.",
+                    risk_level=RiskLevel.CRITICAL,
+                    principle=ResponsibleAIPrinciple.RELIABILITY_AND_SAFETY.value,
+                )
+            requires_approval = autonomy != "autonomous"
+            return PolicyDecision(
+                allowed=True,
+                requires_approval=requires_approval,
+                reason=(
+                    f"Launching application '{app_name}' requires explicit approval."
+                    if requires_approval
+                    else f"Launching application '{app_name}' permitted."
+                ),
+                risk_level=RiskLevel.HIGH if requires_approval else RiskLevel.MEDIUM,
+                principle=ResponsibleAIPrinciple.ACCOUNTABILITY.value,
+            )
+
+        # 10. System Process Monitoring & Notifications
+        if tool_name in ("list_system_processes", "send_desktop_notification"):
+            principle = (
+                ResponsibleAIPrinciple.INCLUSIVENESS.value
+                if tool_name == "send_desktop_notification"
+                else ResponsibleAIPrinciple.TRANSPARENCY.value
+            )
+            return PolicyDecision(
+                allowed=True,
+                requires_approval=False,
+                reason=f"Operation '{tool_name}' permitted.",
+                risk_level=RiskLevel.SAFE,
+                principle=principle,
+            )
+
+        # 11. Clipboard Tools
+        if tool_name in ("read_clipboard", "write_clipboard"):
+            requires_approval = autonomy == "manual"
+            principle = (
+                ResponsibleAIPrinciple.PRIVACY_AND_SECURITY.value
+                if tool_name == "read_clipboard"
+                else ResponsibleAIPrinciple.ACCOUNTABILITY.value
+            )
+            return PolicyDecision(
+                allowed=True,
+                requires_approval=requires_approval,
+                reason=(
+                    f"Clipboard operation '{tool_name}' requires approval in manual mode."
+                    if requires_approval
+                    else f"Clipboard operation '{tool_name}' permitted."
+                ),
+                risk_level=RiskLevel.MEDIUM if requires_approval else RiskLevel.SAFE,
+                principle=principle,
             )
 
         # Unknown tool (Reliability & Safety)

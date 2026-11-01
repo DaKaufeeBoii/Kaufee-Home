@@ -124,10 +124,12 @@ def create_step_reporter():
 def run(
     goal: str = typer.Argument(..., help="The plain-English task goal to execute."),
     workspace: Optional[Path] = typer.Option(None, "--workspace", "-w", help="Workspace root directory."),
-    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="LLM provider ('ollama', 'remote', 'mock')."),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="LLM provider ('ollama', 'remote', 'mock', 'hybrid')."),
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model name."),
     mode: Optional[str] = typer.Option(None, "--mode", help="Autonomy mode: 'manual', 'assisted', or 'autonomous'."),
     approval_mode: Optional[str] = typer.Option(None, "--approval-mode", help="Approval scope: 'plan' (approve full plan upfront) or 'step'."),
+    runner: Optional[str] = typer.Option(None, "--runner", help="Execution runner: 'auto', 'subprocess', or 'docker'."),
+    grant_workspace: Optional[str] = typer.Option(None, "--grant-workspace", help="Temporary workspace write/edit authorization (e.g. '15m', '1h')."),
     timeout: int = typer.Option(300, "--timeout", "-t", help="LLM request timeout in seconds (default 300)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Automatically approve risky actions."),
 ) -> None:
@@ -139,19 +141,27 @@ def run(
         autonomy_mode=mode,
         approval_mode=approval_mode,
     )
+    if runner:
+        cfg.runner_type = runner.lower().strip()
+
+    grant_info = ""
+    if grant_workspace:
+        grant_info = f"\n[bold]Scoped Grant:[/bold] [cyan]workspace ({grant_workspace})[/cyan]"
 
     console.print(
         Panel(
             f"[bold]Goal:[/bold] {goal}\n"
             f"[bold]Workspace:[/bold] {cfg.workspace_root}\n"
             f"[bold]Autonomy Mode:[/bold] {cfg.autonomy_mode.upper()} | [bold]Approval Gate:[/bold] {cfg.approval_mode.upper()}\n"
-            f"[bold]LLM Provider:[/bold] {cfg.llm_provider} ({cfg.ollama_model if cfg.llm_provider == 'ollama' else cfg.remote_model})",
+            f"[bold]LLM Provider:[/bold] {cfg.llm_provider} | [bold]Runner:[/bold] {cfg.runner_type.upper()}{grant_info}",
             title=f"[bold green]Kaufee-Home v{__version__}[/bold green]",
             border_style="green",
         )
     )
 
     controller = AgentController(config=cfg, llm_timeout=timeout)
+    if grant_workspace:
+        controller.grants.grant("workspace", grant_workspace)
     approval_cb = create_approval_handler(auto_approve=yes)
     plan_approval_cb = create_plan_approval_handler(auto_approve=yes)
     step_cb = create_step_reporter()

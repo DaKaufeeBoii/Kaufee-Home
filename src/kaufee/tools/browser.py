@@ -177,3 +177,98 @@ class BrowserDownloadTool(BaseTool):
                 except Exception:
                     pass
             return False, f"Download failed: {exc}", {}
+
+
+
+class BrowserClickTool(BaseTool):
+    """Click an element on a web page using a CSS or XPath selector."""
+
+    name = "browser_click"
+    description = "Navigate to a web page and click an interactive element matching a CSS selector."
+
+    def __init__(self, timeout_seconds: float = 15.0):
+        self.timeout = timeout_seconds
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Web URL to open."},
+                "selector": {"type": "string", "description": "CSS selector of element to click (e.g. '#submit-btn')."},
+            },
+            "required": ["url", "selector"],
+        }
+
+    def run(self, arguments: dict[str, Any], workspace_root: Path) -> tuple[bool, str, dict[str, Any]]:
+        url = str(arguments.get("url", "")).strip()
+        selector = str(arguments.get("selector", "")).strip()
+        if not url or not selector:
+            return False, "Both 'url' and 'selector' are required.", {}
+
+        try:
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.set_default_timeout(int(self.timeout * 1000))
+                page.goto(url)
+                page.click(selector)
+                new_title = page.title()
+                browser.close()
+                return True, f"Successfully clicked element '{selector}' on '{url}'. New title: '{new_title}'.", {
+                    "url": url,
+                    "selector": selector,
+                    "new_title": new_title,
+                }
+        except Exception as exc:
+            return False, f"Failed to click selector '{selector}' on '{url}': {exc}", {"error": str(exc)}
+
+
+class BrowserFillTool(BaseTool):
+    """Fill text into an input field on a web page using a CSS selector."""
+
+    name = "browser_fill"
+    description = "Navigate to a web page and type text into an input element matching a CSS selector."
+
+    def __init__(self, timeout_seconds: float = 15.0):
+        self.timeout = timeout_seconds
+
+    @property
+    def parameters_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Web URL to open."},
+                "selector": {"type": "string", "description": "CSS selector of the input field to fill."},
+                "text": {"type": "string", "description": "Text content to type into the field."},
+            },
+            "required": ["url", "selector", "text"],
+        }
+
+    def run(self, arguments: dict[str, Any], workspace_root: Path) -> tuple[bool, str, dict[str, Any]]:
+        url = str(arguments.get("url", "")).strip()
+        selector = str(arguments.get("selector", "")).strip()
+        text = str(arguments.get("text", ""))
+        if not url or not selector:
+            return False, "Both 'url' and 'selector' are required.", {}
+
+        try:
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.set_default_timeout(int(self.timeout * 1000))
+                page.goto(url)
+                page.fill(selector, text)
+                browser.close()
+                sanitized_text = redact_sensitive_text(text)
+                return True, f"Successfully typed text into '{selector}' on '{url}'.", {
+                    "url": url,
+                    "selector": selector,
+                    "text_preview": sanitized_text[:20],
+                }
+        except Exception as exc:
+            return False, f"Failed to fill selector '{selector}' on '{url}': {exc}", {"error": str(exc)}

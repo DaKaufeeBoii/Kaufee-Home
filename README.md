@@ -68,6 +68,9 @@ graph TD
 | **Model Context Protocol (MCP)** (`src/kaufee/mcp/`) | External stdio JSON-RPC tool integrations with schema discovery and policy authorization. |
 | **Pluggable Execution Runners** (`src/kaufee/tools/runner_base.py`) | Subprocess runner and network-isolated Docker sandbox (`--network none`, memory quotas). |
 | **Two-Tier Hybrid Router** (`src/kaufee/llm/router.py`) | Local-first model execution ($0 cost) with automatic escalation to cloud frontier models. |
+| **Desktop System Automation** (`src/kaufee/tools/system.py`) | Non-blocking app launcher (`notepad`, `code`, etc.), process monitoring, and desktop notifications. |
+| **Clipboard Tools** (`src/kaufee/tools/clipboard.py`) | Read/write system clipboard with automatic credential and sensitive data redaction. |
+| **Session Scoped Grants** (`src/kaufee/safety/grants.py`) | Time-bounded scoped grants (`--grant-workspace 15m`) eliminating approval friction safely. |
 
 ---
 
@@ -266,7 +269,7 @@ kaufee run "Create a Python program that draws a triangle, run it, and fix any e
 Example terminal session:
 ```
 ======================================================================
-Kaufee-Home v0.4.0
+Kaufee-Home v0.5.0
 Goal: Create a Python program that draws a triangle, run it, and fix any errors.
 Workspace: D:\Kaufee\padhai\7th-sem\Agentic-AI\Agentic-AI-Kaufee\workspace
 LLM Provider: ollama (qwen2.5-coder:7b)
@@ -391,7 +394,24 @@ Run routine planning and tool execution using a local model with $0 marginal cos
 kaufee run "Build an optimized LRU cache with tests" --provider hybrid
 ```
 
-### 11. Revert Changes (`kaufee undo`)
+### 11. Scoped Permission Grants (`--grant-workspace`)
+
+Eliminate prompt fatigue during active development sessions with time-bounded authorization grants:
+```bash
+kaufee run "Refactor the authentication module" --grant-workspace 15m
+```
+Grants permit mutating workspace operations for the specified duration (e.g. `15m`, `1h`) without prompting, while destructive operations (such as file deletions) and dangerous commands remain securely gated.
+
+### 12. Desktop OS & System Automation Tools
+
+Automate your local environment seamlessly with built-in desktop utilities:
+- `launch_application`: Spawns desktop applications (`notepad`, `calculator`, `code`, `explorer`) asynchronously with strict dangerous binary filters.
+- `list_system_processes`: Queries active processes, PIDs, and memory usage.
+- `send_desktop_notification`: Triggers native OS toast notifications on Windows, macOS, and Linux.
+- `read_clipboard` & `write_clipboard`: System clipboard interaction with automated secret redaction.
+- `browser_click` & `browser_fill`: Interactive browser navigation and form input automation.
+
+### 13. Revert Changes (`kaufee undo`)
 
 ```bash
 kaufee undo triangle.py

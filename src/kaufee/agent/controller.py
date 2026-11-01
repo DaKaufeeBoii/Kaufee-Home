@@ -13,6 +13,7 @@ from kaufee.llm.api import RemoteAPIClient
 from kaufee.llm.base import BaseLLMClient
 from kaufee.llm.mock import MockLLMClient
 from kaufee.llm.ollama import OllamaClient
+from kaufee.safety.grants import ScopedGrantManager
 from kaufee.safety.policy import PolicyEngine
 from kaufee.state.audit import AuditLogger
 from kaufee.state.models import TaskState, TaskStatus, ToolCall
@@ -29,11 +30,13 @@ class AgentController:
         llm_client: Optional[BaseLLMClient] = None,
         tool_registry: Optional[ToolRegistry] = None,
         llm_timeout: float = 300.0,
+        grants: Optional[ScopedGrantManager] = None,
     ):
         self.config = config or KaufeeConfig.load()
         self.workspace_root = self.config.workspace_root
         self.workspace_root.mkdir(parents=True, exist_ok=True)
         self._llm_timeout = llm_timeout
+        self.grants = grants or ScopedGrantManager()
 
         # Persistence & Store
         state_dir = self.workspace_root / ".kaufee" / "state"
@@ -41,7 +44,7 @@ class AgentController:
 
         # Tools & Policy
         self.tools = tool_registry or ToolRegistry.create_default(self.config, workspace_root=self.workspace_root)
-        self.policy = PolicyEngine(self.config)
+        self.policy = PolicyEngine(self.config, grants=self.grants)
 
         # LLM Client
         self.llm = llm_client or self._resolve_llm_client()

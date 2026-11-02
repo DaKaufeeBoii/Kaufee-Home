@@ -48,7 +48,7 @@ class KaufeeConfig(BaseModel):
         description="Base URL for the local Ollama instance.",
     )
     ollama_model: str = Field(
-        default="qwen2.5-coder:7b",
+        default="qwen2.5-coder:3b",
         description="Model name to use with Ollama.",
     )
     ollama_keep_alive: str = Field(
@@ -191,7 +191,7 @@ class KaufeeConfig(BaseModel):
         ollama_keep_alive = get_val("KAUFEE_OLLAMA_KEEP_ALIVE", "10m")
         ollama_num_predict = int(get_val("KAUFEE_OLLAMA_NUM_PREDICT", "2048"))
         ollama_mdl = (
-            model if chosen_provider == "ollama" and model else get_val("OLLAMA_MODEL", "qwen2.5-coder:7b")
+            model if chosen_provider == "ollama" and model else get_val("OLLAMA_MODEL", "qwen2.5-coder:3b")
         )
 
         remote_url = get_val("REMOTE_API_BASE_URL", "https://api.openai.com/v1")

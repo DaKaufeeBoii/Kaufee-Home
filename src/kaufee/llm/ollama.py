@@ -14,7 +14,7 @@ class OllamaClient(BaseLLMClient):
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model: str = "qwen2.5-coder:7b",
+        model: str = "qwen2.5-coder:3b",
         timeout: float = 300.0,
         keep_alive: str = "10m",
         num_predict: int = 2048,
@@ -50,7 +50,7 @@ class OllamaClient(BaseLLMClient):
                 return
 
         # If user was using the default model and it's not installed, auto-fallback to an installed model
-        if self.model == "qwen2.5-coder:7b":
+        if self.model == "qwen2.5-coder:3b":
             # Prefer coding or vision-language models, else first available
             fallback = installed[0]
             for m in installed:

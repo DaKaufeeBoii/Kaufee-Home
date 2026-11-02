@@ -14,7 +14,7 @@ Unlike conventional chat assistants that merely claim a task succeeded, **Kaufee
 
 ## Key Highlights
 
-- **Local-First & Model-Agnostic**: First-class integration with local [Ollama](https://ollama.ai) models (`qwen2.5-coder:7b`, `llama3`, etc.), plus adapters for OpenAI-compatible remote APIs and offline deterministic mocks.
+- **Local-First & Model-Agnostic**: First-class integration with local [Ollama](https://ollama.ai) models (`qwen2.5-coder:3b`, `llama3`, etc.), plus adapters for OpenAI-compatible remote APIs and offline deterministic mocks.
 - **Verifiable Execution**: Never trusts an LLM's claim that code works. Runs AST syntax validation, exit code checks, non-empty file checks, and independent execution tests.
 - **Workspace Path Checks**: Tool paths are checked against the configured workspace. Parent traversal, protected paths, and existing symlink components are rejected. These checks are not an OS sandbox and do not eliminate races with concurrent filesystem changes.
 - **Safer Writes & Undo**: File writes and edits use a temporary sibling file followed by an atomic replace. Overwritten files, deleted files and directories, and moved files are backed up in `.kaufee/backups/`. Use `kaufee undo <path>` to restore the latest matching snapshot or reverse a move.
@@ -227,7 +227,7 @@ cp .env.example .env
 Start Ollama and pull your desired coding model:
 ```bash
 ollama serve
-ollama pull qwen2.5-coder:7b
+ollama pull qwen2.5-coder:3b
 ```
 
 #### Option B: Remote OpenAI / Gemini API
@@ -272,7 +272,7 @@ Example terminal session:
 Kaufee-Home v0.5.0
 Goal: Create a Python program that draws a triangle, run it, and fix any errors.
 Workspace: D:\Kaufee\padhai\7th-sem\Agentic-AI\Agentic-AI-Kaufee\workspace
-LLM Provider: ollama (qwen2.5-coder:7b)
+LLM Provider: ollama (qwen2.5-coder:3b)
 ======================================================================
 
 Execution Plan:

@@ -155,7 +155,7 @@ On Windows, if you did not activate the virtual environment, use:
 3. In a terminal, download the default coding model:
 
    ```bash
-   ollama pull qwen2.5-coder:7b
+   ollama pull qwen2.5-coder:3b
    ```
 
 4. Run a real task from the Kaufee-Home folder:

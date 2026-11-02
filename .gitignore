@@ -1,4 +1,6 @@
-# Python
+# ==============================================================================
+# Python & Build Artifacts
+# ==============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -18,45 +20,200 @@ var/
 wheels/
 share/python-wheels/
 *.egg-info/
+src/*.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Virtual environments
+# ==============================================================================
+# Virtual Environments & Package Managers
+# ==============================================================================
 .venv/
 venv/
 ENV/
 env/
+.env_*/
+.uv/
 
-# IDE & editors
+# ==============================================================================
+# IDEs, Editors & Shell History
+# ==============================================================================
 .idea/
 .vscode/
 *.swp
 *.swo
-.DS_Store
+*~
+*.sublime-workspace
+*.sublime-project
+.history/
+.fleet/
+.project
+.classpath
+.settings/
+.bash_history
+.zsh_history
+.python_history
+powershell_history.txt
+PowerShell_transcript.*
 
-# Local secrets (keep the safe template in version control)
+# ==============================================================================
+# Operating System Artifacts (Windows, macOS, Linux)
+# ==============================================================================
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+.directory
+
+# ==============================================================================
+# Secrets, Credentials, Tokens & Local Config
+# ==============================================================================
 .env
 .env.*
+.env.local
+.env.*.local
 !.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.id_rsa
+id_rsa*
+*.pub
+*.token
+*.secret
+secrets/
+credentials.json
+client_secret*.json
 
-# Testing & coverage
+# ==============================================================================
+# Testing, Coverage & Playwright
+# ==============================================================================
 .pytest_cache/
-# Pytest temp data, caches, and local QA build/install artifacts
 pytest__/
 .coverage
+.coverage.*
 coverage.xml
+nosetests.xml
 htmlcov/
 .mypy_cache/
 .ruff_cache/
 .tox/
 .nox/
+.hypothesis/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
 
-# Kaufee state & audit
+# ==============================================================================
+# Kaufee State, Backups & Audit Logs
+# ==============================================================================
 .kaufee/
 audit_logs/
 *.audit.json
-scratch/
-test_workspace/
+*.state.json
+
+# ==============================================================================
+# Temporary Workspaces, Dumps & Test Runs
+# ==============================================================================
 workspace/
+test_workspace/
+test_workspace*/
+test_saf*/
+test_run*/
+scratch/
 temp/
+tmp/
+.tmp/
+.cache/
+*.cache
+
+# ==============================================================================
+# College Presentation, Viva Cheatsheets & Personal Runbooks
+# ==============================================================================
+COLLEGE_*
+*DEMO_RUNBOOK*
+*EXECUTION_DISPLAY*
+*VIVA*
+*CHEATSHEET*
+notes/
+NOTES.md
+*.notes
+TODO.md
+todo.txt
+presentation/
+slides/
+
+# ==============================================================================
+# Media, Demo Screen Recordings, Office Docs & Exports
+# ==============================================================================
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.ico
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.pdf
+*.pptx
+*.docx
+*.xlsx
+
+# ==============================================================================
+# Archives & Compressed Files
+# ==============================================================================
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.gz
+
+# ==============================================================================
+# Databases & Local Storage
+# ==============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+
+# ==============================================================================
+# Local Development, Scrapers & Scratch Scripts
+# ==============================================================================
+.licenses/
+capture_all_screens.py
+capture_*.py
+scratch_*.py
+*.log
+*.bak
+*.backup
+*.orig
+*.rej
+*.prof
+*.out
+*.pid
